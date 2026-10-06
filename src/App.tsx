@@ -21,6 +21,7 @@ import KycPage from '@/pages/app/KycPage'
 import DashboardPage from '@/pages/app/DashboardPage'
 import AccountsPage from '@/pages/app/AccountsPage'
 import AccountDetailPage from '@/pages/app/AccountDetailPage'
+import SettingsPage from '@/pages/app/SettingsPage'
 import Placeholder from '@/pages/Placeholder'
 
 const CUSTOMER_ROUTES = [
@@ -29,7 +30,6 @@ const CUSTOMER_ROUTES = [
   '/app/transactions',
   '/app/receipts',
   '/app/security',
-  '/app/settings',
   '/app/support',
 ]
 
@@ -88,6 +88,7 @@ function App() {
               <Route path="/app/accounts" element={<AccountsPage />} />
               <Route path="/app/accounts/:id" element={<AccountDetailPage />} />
               <Route path="/app/kyc" element={<KycPage />} />
+              <Route path="/app/settings" element={<SettingsPage />} />
             </Route>
 
             {ADMIN_ROUTES.map((path) => (
