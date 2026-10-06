@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRightIcon,
@@ -9,17 +9,19 @@ import {
   Loader2Icon,
   LockIcon,
   ArrowLeftIcon,
+  RefreshCcwIcon,
+  ClockIcon,
 } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useBeneficiaries } from "@/hooks/useBeneficiaries";
-import { initiateTransfer } from "@/services/transactions";
+import { initiateTransfer, fetchTransferQuote } from "@/services/transactions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import type { BankAccount } from "@/types/accounts";
 import type { Beneficiary } from "@/types/beneficiary";
-import type { TransactionType } from "@/types/transactions";
+import type { TransactionType, TransferQuote } from "@/types/transactions";
 import { cn } from "@/lib/utils";
 
 function formatAmount(amount: number, currency: string) {
@@ -58,6 +60,56 @@ export default function TransferPage() {
   const [error, setError] = useState("");
   const [txId, setTxId] = useState("");
 
+  const [quote, setQuote] = useState<TransferQuote | null>(null);
+  const [quoteLoading, setQuoteLoading] = useState(false);
+  const [timeRemaining, setTimeRemaining] = useState(0);
+
+  useEffect(() => {
+    if (step === 3 && quote && timeRemaining > 0) {
+      const interval = setInterval(() => {
+        const now = new Date().getTime();
+        const expires = new Date(quote.expiresAt).getTime();
+        const diff = Math.max(0, Math.floor((expires - now) / 1000));
+        setTimeRemaining(diff);
+      }, 1000);
+      return () => clearInterval(interval);
+    }
+  }, [step, quote, timeRemaining]);
+
+  const loadQuote = async () => {
+    if (!sourceAccount) return;
+    setQuoteLoading(true);
+    setError("");
+    
+    let type: TransactionType = "EXTERNAL_WIRE";
+    let destCurrency = "USD";
+
+    if (destType === "OWN" && destAccount) {
+      type = "INTERNAL_TRANSFER";
+      destCurrency = destAccount.currency;
+    } else if (destType === "BENEFICIARY" && destBeneficiary) {
+      type = destBeneficiary.type === "INTERNAL" ? "SWENTRA_TRANSFER" : "EXTERNAL_WIRE";
+      destCurrency = destBeneficiary.currency || "USD";
+    }
+
+    try {
+      const q = await fetchTransferQuote({
+        sourceAccountId: sourceAccount.id,
+        destinationCurrency: destCurrency,
+        amount: numericAmount,
+        type,
+      });
+      setQuote(q);
+      const diff = Math.max(0, Math.floor((new Date(q.expiresAt).getTime() - new Date().getTime()) / 1000));
+      setTimeRemaining(diff);
+      setStep(3);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setQuoteLoading(false);
+    }
+  };
+
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     // allow digits, commas and one dot
     const val = e.target.value.replace(/[^\d.,]/g, "");
@@ -76,11 +128,9 @@ export default function TransferPage() {
     setIsProcessing(true);
 
     try {
-      let type: TransactionType = "EXTERNAL_WIRE";
       let recipientDetails: any = {};
 
       if (destType === "OWN" && destAccount) {
-        type = "INTERNAL_TRANSFER";
         recipientDetails = {
           type: "INTERNAL",
           fullName: "Own Account",
@@ -88,10 +138,6 @@ export default function TransferPage() {
           currency: destAccount.currency,
         };
       } else if (destType === "BENEFICIARY" && destBeneficiary) {
-        type =
-          destBeneficiary.type === "INTERNAL"
-            ? "SWENTRA_TRANSFER"
-            : "EXTERNAL_WIRE";
         recipientDetails = {
           type: destBeneficiary.type,
           fullName: destBeneficiary.fullName,
@@ -103,10 +149,7 @@ export default function TransferPage() {
       }
 
       const result = await initiateTransfer({
-        sourceAccountId: sourceAccount!.id,
-        type,
-        amount: numericAmount,
-        currency: sourceAccount!.currency,
+        quoteId: quote!.quoteId,
         recipientDetails,
         reference: reference || "Funds Transfer",
       });
@@ -361,16 +404,27 @@ export default function TransferPage() {
                 />
               </div>
 
+              {error && step === 2 && (
+                <p className="text-sm text-destructive mt-2">{error}</p>
+              )}
               <Button
                 className="w-full h-12 mt-6"
                 disabled={
                   !numericAmount ||
                   numericAmount <= 0 ||
-                  numericAmount > sourceAccount.availableBalance
+                  numericAmount > sourceAccount.availableBalance ||
+                  quoteLoading
                 }
-                onClick={() => setStep(3)}
+                onClick={loadQuote}
               >
-                Review Transfer
+                {quoteLoading ? (
+                  <>
+                    <Loader2Icon className="mr-2 size-4 animate-spin" />
+                    Generating Quote...
+                  </>
+                ) : (
+                  "Review Transfer"
+                )}
               </Button>
             </div>
           )}
@@ -378,7 +432,7 @@ export default function TransferPage() {
       )}
 
       {/* STEP 3: REVIEW */}
-      {step === 3 && (
+      {step === 3 && quote && (
         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
           <div className="flex items-center gap-2 mb-6">
             <button
@@ -398,7 +452,17 @@ export default function TransferPage() {
                 Amount to send
               </div>
               <div className="text-4xl font-light tracking-tight text-foreground">
-                {formatAmount(numericAmount, sourceAccount!.currency)}
+                {formatAmount(quote.totalDebit, quote.sourceCurrency)}
+              </div>
+              <div className="flex justify-center items-center gap-2 mt-4 text-xs font-medium text-muted-foreground bg-surface/50 rounded-full py-1.5 px-4 w-max mx-auto">
+                <ClockIcon className="size-3.5" />
+                {timeRemaining > 0 ? (
+                  <span>
+                    Quote expires in {Math.floor(timeRemaining / 60)}:{(timeRemaining % 60).toString().padStart(2, '0')}
+                  </span>
+                ) : (
+                  <span className="text-destructive">Quote expired</span>
+                )}
               </div>
             </div>
 
@@ -439,17 +503,39 @@ export default function TransferPage() {
               )}
 
               <div className="flex justify-between pt-4 border-t border-border">
+                <span className="text-muted-foreground">Exchange Rate</span>
+                <span className="font-medium">
+                  {quote.exchangeRate === 1.0 
+                    ? "1.00 (Same Currency)" 
+                    : `1 ${quote.sourceCurrency} = ${quote.exchangeRate.toFixed(4)} ${quote.destinationCurrency}`}
+                </span>
+              </div>
+              <div className="flex justify-between border-t border-border pt-4">
+                <span className="text-muted-foreground">Recipient Gets</span>
+                <span className="font-medium text-foreground">
+                  {formatAmount(quote.convertedAmount, quote.destinationCurrency)}
+                </span>
+              </div>
+
+              <div className="flex justify-between pt-4 border-t border-border">
                 <span className="text-muted-foreground">Fee</span>
                 <span className="font-medium">
-                  0.00 {sourceAccount!.currency}
+                  {formatAmount(quote.fee, quote.sourceCurrency)}
                 </span>
               </div>
             </div>
           </Card>
 
-          <Button className="w-full h-12" onClick={() => setStep(4)}>
-            Confirm & Authorize
-          </Button>
+          {timeRemaining > 0 ? (
+            <Button className="w-full h-12" onClick={() => setStep(4)}>
+              Confirm & Authorize
+            </Button>
+          ) : (
+            <Button className="w-full h-12" variant="outline" onClick={loadQuote} disabled={quoteLoading}>
+              <RefreshCcwIcon className={cn("mr-2 size-4", quoteLoading && "animate-spin")} />
+              Refresh Quote
+            </Button>
+          )}
         </div>
       )}
 

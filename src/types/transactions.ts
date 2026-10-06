@@ -28,12 +28,20 @@ export interface Transaction {
   createdAt: Timestamp | Date
 }
 
-export interface TransferRequest {
-  sourceAccountId: string
-  type: TransactionType
-  amount: number
-  currency: string
-  recipientDetails: TransactionRecipientDetails
+export interface TransferQuote {
+  quoteId: string
+  sourceCurrency: string
+  destinationCurrency: string
+  principalAmount: number
+  fee: number
+  totalDebit: number
+  exchangeRate: number
+  convertedAmount: number
+  expiresAt: string
+}
+
+export interface InitiateTransferParams {
+  quoteId: string
+  recipientDetails: any
   reference?: string
-  exchangeRate?: number
 }

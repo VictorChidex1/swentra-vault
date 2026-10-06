@@ -1,7 +1,7 @@
 import { collection, query, orderBy, getDocs } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
-import type { Transaction, TransferRequest } from '@/types/transactions'
+import type { Transaction, InitiateTransferParams, TransferQuote, TransactionType } from '@/types/transactions'
 
 export async function getTransactions(userId: string): Promise<Transaction[]> {
   const q = query(
@@ -16,8 +16,27 @@ export async function getTransactions(userId: string): Promise<Transaction[]> {
   })) as Transaction[]
 }
 
-export async function initiateTransfer(request: TransferRequest): Promise<{ success: boolean; transactionId: string }> {
-  const executeTransfer = httpsCallable<TransferRequest, { success: boolean; transactionId: string }>(functions, 'executeTransfer')
+export interface GetQuoteRequest {
+  sourceAccountId: string
+  destinationCurrency: string
+  amount: number
+  type: TransactionType
+}
+
+export async function fetchTransferQuote(request: GetQuoteRequest): Promise<TransferQuote> {
+  const getTransferQuote = httpsCallable<GetQuoteRequest, TransferQuote>(functions, 'getTransferQuote')
+  
+  try {
+    const result = await getTransferQuote(request)
+    return result.data
+  } catch (error: any) {
+    console.error('Failed to get quote:', error)
+    throw new Error(error.message || 'Failed to fetch live exchange rate.')
+  }
+}
+
+export async function initiateTransfer(request: InitiateTransferParams): Promise<{ success: boolean; transactionId: string }> {
+  const executeTransfer = httpsCallable<InitiateTransferParams, { success: boolean; transactionId: string }>(functions, 'executeTransfer')
   
   try {
     const result = await executeTransfer(request)
