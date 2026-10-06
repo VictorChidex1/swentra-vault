@@ -40,7 +40,7 @@ const CURRENCIES: CurrencyAccount[] = [
 
 export function MultiCurrency() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+    <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <Reveal>
         <SectionHeading
           eyebrow="Multi-currency banking"

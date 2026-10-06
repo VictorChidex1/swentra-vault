@@ -16,7 +16,7 @@ const STEPS = [
 
 export function SecureTransfers() {
   return (
-    <section className="mx-auto max-w-6xl px-4 py-20 sm:px-6 lg:px-8">
+    <section className="mx-auto max-w-7xl px-4 py-20 sm:px-6 lg:px-8">
       <div className="grid items-start gap-12 lg:grid-cols-2">
         <Reveal>
           <SectionHeading

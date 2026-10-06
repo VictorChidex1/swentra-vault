@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 
 export function Hero() {
   return (
-    <section className="relative mx-auto max-w-6xl px-4 pt-20 pb-16 text-center sm:px-6 lg:px-8 lg:pt-28">
+    <section className="relative mx-auto max-w-7xl px-4 pt-20 pb-16 text-center sm:px-6 lg:px-8 lg:pt-28">
       <span className="inline-flex items-center gap-2 rounded-full border border-border px-3 py-1 text-xs text-muted-foreground">
         <span className="size-1.5 rounded-full bg-primary" aria-hidden="true" />
         Banking technology prototype

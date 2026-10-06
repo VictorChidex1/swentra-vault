@@ -3,7 +3,7 @@ import { TerminalPanel } from '@/components/terminal/TerminalPanel'
 
 export function Disclaimer() {
   return (
-    <section className="mx-auto max-w-4xl px-4 py-16 sm:px-6 lg:px-8">
+    <section className="mx-auto max-w-5xl px-4 py-16 sm:px-6 lg:px-8">
       <Reveal>
         <TerminalPanel className="bg-surface-2/50">
           <p className="text-xs tracking-[0.2em] text-warning uppercase">

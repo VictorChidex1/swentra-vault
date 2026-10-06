@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 
 export function FinalCta() {
   return (
-    <section className="mx-auto max-w-4xl px-4 py-20 text-center sm:px-6 lg:px-8">
+    <section className="mx-auto max-w-5xl px-4 py-20 text-center sm:px-6 lg:px-8">
       <Reveal>
         <h2 className="text-3xl font-semibold tracking-tight text-foreground sm:text-4xl">
           Open your Swentra Vault account.
