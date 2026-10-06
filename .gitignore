@@ -13,6 +13,7 @@ dist-ssr
 *.local
 
 # Local environment (Firebase project config)
+.env
 .env.local
 .env.*.local
 
@@ -21,6 +22,9 @@ dist-ssr
 firebase-debug.log*
 firestore-debug.log*
 ui-debug.log*
+
+# Exported emulator state (local dev data, never committed)
+.emulator-data/
 
 # Compiled Cloud Functions output
 functions/lib

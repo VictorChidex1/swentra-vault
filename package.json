@@ -8,7 +8,9 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "preview": "vite preview",
-    "emulators": "firebase emulators:start",
+    "emulators": "mkdir -p .emulator-data && firebase emulators:start --import=./.emulator-data --export-on-exit",
+    "emulators:export": "firebase emulators:export ./.emulator-data --force",
+    "emulators:stop": "kill -15 $(lsof -t -i:4000,8080,9099,5001,9199) 2>/dev/null || echo 'Emulators already stopped'",
     "functions:build": "npm --prefix functions run build"
   },
   "dependencies": {

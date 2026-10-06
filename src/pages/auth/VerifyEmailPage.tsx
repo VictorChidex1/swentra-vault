@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { MailIcon, CheckCircle2Icon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -15,22 +15,27 @@ export default function VerifyEmailPage() {
 
   const oobCode = searchParams.get('oobCode')
   const pending = searchParams.get('pending') === 'true'
+  const hasHandledCode = useRef(false)
 
   // Handle verification via email link (oobCode present)
   useEffect(() => {
-    if (!oobCode) return
+    if (!oobCode || hasHandledCode.current) return
 
     async function handleCode() {
+      hasHandledCode.current = true
       setVerifying('idle')
       try {
-        if (!oobCode) return
-        await applyVerificationCode(oobCode)
+        await applyVerificationCode(oobCode!)
         setVerifying('success')
       } catch (err: unknown) {
         const message = err instanceof Error ? err.message : 'Verification failed'
         if (message.includes('expired-action-code')) {
           setError('This verification link has expired. Request a new one below.')
-        } else if (message.includes('already-verified') || message.includes('user-not-found')) {
+        } else if (
+          message.includes('already-verified') || 
+          message.includes('user-not-found') ||
+          message.includes('invalid-action-code') // Safely ignore double-fire races
+        ) {
           setVerifying('success')
         } else {
           setError(message.replace(/^Firebase: /, '').replace(/ \(auth\/.*\)$/, ''))
