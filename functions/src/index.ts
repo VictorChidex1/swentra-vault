@@ -230,3 +230,102 @@ export const runMigration = functions.https.onRequest(async (_req, res) => {
     res.status(500).send("Migration failed. Check Firebase console logs.");
   }
 });
+
+export const executeTransfer = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  
+  const { sourceAccountId, type, amount, currency, recipientDetails, reference, exchangeRate = 1 } = data;
+  const uid = context.auth.uid;
+  const db = getFirestore();
+
+  if (amount <= 0) throw new functions.https.HttpsError('invalid-argument', 'Amount must be positive');
+
+  return await db.runTransaction(async (t) => {
+    // 1. Get Sender Account
+    const sourceRef = db.collection(`users/${uid}/accounts`).doc(sourceAccountId);
+    const sourceDoc = await t.get(sourceRef);
+    if (!sourceDoc.exists) throw new functions.https.HttpsError('not-found', 'Source account not found');
+    
+    const sourceData = sourceDoc.data()!;
+    if (sourceData.availableBalance < amount) {
+      throw new functions.https.HttpsError('failed-precondition', 'Insufficient funds');
+    }
+
+    // Prepare debits
+    const newSourceBalance = sourceData.balance - amount;
+    const newSourceAvailable = sourceData.availableBalance - amount;
+
+    const destinationAmount = amount * exchangeRate; 
+
+    let destinationAccountId: string | null = null;
+    let destinationUid: string | null = null;
+
+    if (type === 'SWENTRA_TRANSFER' || type === 'INTERNAL_TRANSFER') {
+      const accountNumberToFind = recipientDetails.accountNumber.replace(/\s/g, '');
+      const registryRef = db.collection('accountNumbers').doc(accountNumberToFind);
+      const registryDoc = await t.get(registryRef);
+      
+      if (!registryDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Recipient account not found on Swentra Vault');
+      }
+
+      destinationUid = registryDoc.data()!.assignedTo;
+      destinationAccountId = registryDoc.data()!.accountId;
+
+      const destRef = db.collection(`users/${destinationUid}/accounts`).doc(destinationAccountId!);
+      const destDoc = await t.get(destRef);
+      if (!destDoc.exists) throw new functions.https.HttpsError('internal', 'Destination account missing');
+
+      const destData = destDoc.data()!;
+      
+      const newDestBalance = destData.balance + destinationAmount;
+      const newDestAvailable = destData.availableBalance + destinationAmount;
+      
+      t.update(destRef, {
+        balance: newDestBalance,
+        availableBalance: newDestAvailable
+      });
+    }
+
+    // Debit source
+    t.update(sourceRef, {
+      balance: newSourceBalance,
+      availableBalance: newSourceAvailable
+    });
+
+    // Create Transaction Record for Sender
+    const txRef = db.collection(`users/${uid}/transactions`).doc();
+    const transactionRecord = {
+      id: txRef.id,
+      userId: uid,
+      type,
+      amount: -amount, // Negative for sender
+      currency,
+      sourceAccountId,
+      recipientDetails,
+      exchangeRate,
+      reference: reference || 'Funds Transfer',
+      status: type === 'EXTERNAL_WIRE' ? 'PROCESSING' : 'COMPLETED',
+      createdAt: FieldValue.serverTimestamp()
+    };
+    t.set(txRef, transactionRecord);
+
+    // Create Transaction Record for Recipient (if internal)
+    if ((type === 'SWENTRA_TRANSFER' || type === 'INTERNAL_TRANSFER') && destinationUid) {
+      const recipientTxRef = db.collection(`users/${destinationUid}/transactions`).doc();
+      t.set(recipientTxRef, {
+        id: recipientTxRef.id,
+        userId: destinationUid,
+        type: 'INCOMING_TRANSFER',
+        amount: destinationAmount, // Positive for receiver
+        currency: recipientDetails.currency || currency,
+        sourceDetails: { senderId: uid },
+        reference: reference || 'Incoming Transfer',
+        status: 'COMPLETED',
+        createdAt: FieldValue.serverTimestamp()
+      });
+    }
+
+    return { success: true, transactionId: txRef.id };
+  });
+});
