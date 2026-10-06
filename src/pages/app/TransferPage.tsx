@@ -38,20 +38,27 @@ function formatAccount(num: string) {
 export default function TransferPage() {
   const navigate = useNavigate();
   const { accounts, loading: accountsLoading } = useAccounts();
-  const { beneficiaries, isLoading: beneficiariesLoading } = useBeneficiaries();
+  const { beneficiaries, isLoading: beneficiariesLoading, addBeneficiary } = useBeneficiaries();
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
-  // State
-  const [destType, setDestType] = useState<"OWN" | "BENEFICIARY">(
-    "BENEFICIARY",
-  );
-  const [destAccount, setDestAccount] = useState<BankAccount | null>(null);
-  const [destBeneficiary, setDestBeneficiary] = useState<Beneficiary | null>(
-    null,
-  );
-
+  // Step 1: Source
   const [sourceAccount, setSourceAccount] = useState<BankAccount | null>(null);
+
+  // Step 2: Destination
+  const [destType, setDestType] = useState<"OWN" | "BENEFICIARY" | "NEW">("OWN");
+  const [destAccount, setDestAccount] = useState<BankAccount | null>(null);
+  const [destBeneficiary, setDestBeneficiary] = useState<Beneficiary | null>(null);
+  
+  const [newRecipient, setNewRecipient] = useState({
+    fullName: "",
+    accountNumber: "",
+    bankName: "",
+    swiftCode: "",
+    currency: "USD",
+  });
+
+  // Step 3: Amount
   const [amountStr, setAmountStr] = useState("");
   const [reference, setReference] = useState("");
 
@@ -62,9 +69,11 @@ export default function TransferPage() {
   const [quote, setQuote] = useState<TransferQuote | null>(null);
   const [quoteLoading, setQuoteLoading] = useState(false);
   const [timeRemaining, setTimeRemaining] = useState(0);
+  
+  const [payeeSaved, setPayeeSaved] = useState(false);
 
   useEffect(() => {
-    if (step === 3 && quote && timeRemaining > 0) {
+    if (step === 4 && quote && timeRemaining > 0) {
       const interval = setInterval(() => {
         const now = new Date().getTime();
         const expires = new Date(quote.expiresAt).getTime();
@@ -89,6 +98,9 @@ export default function TransferPage() {
     } else if (destType === "BENEFICIARY" && destBeneficiary) {
       type = destBeneficiary.type === "INTERNAL" ? "SWENTRA_TRANSFER" : "EXTERNAL_WIRE";
       destCurrency = destBeneficiary.currency || "USD";
+    } else if (destType === "NEW") {
+      type = "EXTERNAL_WIRE";
+      destCurrency = newRecipient.currency;
     }
 
     try {
@@ -101,7 +113,7 @@ export default function TransferPage() {
       setQuote(q);
       const diff = Math.max(0, Math.floor((new Date(q.expiresAt).getTime() - new Date().getTime()) / 1000));
       setTimeRemaining(diff);
-      setStep(3);
+      setStep(4);
     } catch (err: any) {
       setError(err.message);
     } finally {
@@ -110,8 +122,15 @@ export default function TransferPage() {
   };
 
   const handleAmountChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    // allow digits, commas and one dot
-    const val = e.target.value.replace(/[^\d.,]/g, "");
+    let val = e.target.value.replace(/[^\d.]/g, ""); // strip non-numeric and non-dots
+    
+    if (val) {
+      const parts = val.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+      if (parts.length > 2) return; // Prevent multiple dots
+      val = parts.join('.');
+    }
+    
     setAmountStr(val);
   };
 
@@ -139,6 +158,15 @@ export default function TransferPage() {
           bankName: destBeneficiary.bankName,
           swiftCode: destBeneficiary.swiftCode,
           currency: destBeneficiary.currency,
+        };
+      } else if (destType === "NEW") {
+        recipientDetails = {
+          type: "EXTERNAL",
+          fullName: newRecipient.fullName,
+          accountNumber: newRecipient.accountNumber,
+          bankName: newRecipient.bankName,
+          swiftCode: newRecipient.swiftCode,
+          currency: newRecipient.currency,
         };
       }
 
@@ -178,7 +206,7 @@ export default function TransferPage() {
             </p>
           </div>
           <div className="flex gap-1">
-            {[1, 2, 3].map((i) => (
+            {[1, 2, 3, 4].map((i) => (
               <div
                 key={i}
                 className={cn(
@@ -191,72 +219,106 @@ export default function TransferPage() {
         </div>
       )}
 
-      {/* STEP 1: DESTINATION */}
+      {/* STEP 1: SOURCE ACCOUNT */}
       {step === 1 && (
         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
           <h2 className="text-sm font-medium tracking-widest text-muted-foreground uppercase">
-            Select Destination
+            Select Source Account
           </h2>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <Card
-              className={cn(
-                "p-4 cursor-pointer transition-colors hover:bg-surface/50 border-border",
-                destType === "OWN"
-                  ? "ring-1 ring-primary bg-primary/5"
-                  : "bg-surface/30",
-              )}
-              onClick={() => setDestType("OWN")}
-            >
-              <WalletIcon className="size-5 mb-3 text-primary" />
-              <div className="font-medium">My Accounts</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Transfer between your Vault accounts
-              </div>
-            </Card>
+          <div className="grid gap-3">
+            {accounts.map((acc) => (
+              <button
+                key={acc.id}
+                onClick={() => {
+                  setSourceAccount(acc);
+                  setStep(2);
+                }}
+                className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-surface/30 hover:bg-surface/50 transition-colors text-left"
+              >
+                <div>
+                  <div className="font-medium text-foreground">
+                    {acc.currency} {acc.type === "current" ? "Current" : "Reserve"}
+                  </div>
+                  <div className="text-sm text-muted-foreground font-mono mt-0.5">
+                    {formatAccount(acc.accountNumber)}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="font-medium text-foreground">
+                    {formatAmount(acc.availableBalance, acc.currency)}
+                  </div>
+                  <div className="text-xs text-muted-foreground">Available</div>
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
-            <Card
-              className={cn(
-                "p-4 cursor-pointer transition-colors hover:bg-surface/50 border-border",
-                destType === "BENEFICIARY"
-                  ? "ring-1 ring-primary bg-primary/5"
-                  : "bg-surface/30",
-              )}
-              onClick={() => setDestType("BENEFICIARY")}
+      {/* STEP 2: DESTINATION */}
+      {step === 2 && (
+        <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
+          <div className="flex items-center gap-2 mb-6">
+            <button
+              onClick={() => setStep(1)}
+              className="p-2 -ml-2 rounded-full hover:bg-surface transition-colors"
             >
-              <UsersIcon className="size-5 mb-3 text-primary" />
-              <div className="font-medium">Trusted Payee</div>
-              <div className="text-xs text-muted-foreground mt-1">
-                Send to a saved beneficiary
-              </div>
-            </Card>
+              <ArrowLeftIcon className="size-4 text-muted-foreground" />
+            </button>
+            <h2 className="text-sm font-medium tracking-widest text-muted-foreground uppercase">
+              Select Recipient
+            </h2>
+          </div>
+
+          <div className="flex bg-surface/30 p-1 rounded-lg border border-border">
+            <button
+              onClick={() => setDestType("OWN")}
+              className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", destType === "OWN" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              My Accounts
+            </button>
+            <button
+              onClick={() => setDestType("BENEFICIARY")}
+              className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", destType === "BENEFICIARY" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              Saved Payees
+            </button>
+            <button
+              onClick={() => setDestType("NEW")}
+              className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", destType === "NEW" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              New Recipient
+            </button>
           </div>
 
           <div className="space-y-3 pt-4">
             {destType === "OWN" && (
               <div className="space-y-3">
-                {accounts.map((acc) => (
-                  <button
-                    key={acc.id}
-                    onClick={() => {
-                      setDestAccount(acc);
-                      setDestBeneficiary(null);
-                      setStep(2);
-                    }}
-                    className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-surface/30 hover:bg-surface/50 transition-colors text-left"
-                  >
-                    <div>
-                      <div className="font-medium">
-                        {acc.currency}{" "}
-                        {acc.type === "current" ? "Current" : "Reserve"}
+                {accounts.map((acc) => {
+                  if (sourceAccount?.id === acc.id) return null;
+                  return (
+                    <button
+                      key={acc.id}
+                      onClick={() => {
+                        setDestAccount(acc);
+                        setDestBeneficiary(null);
+                        setStep(3);
+                      }}
+                      className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-surface/30 hover:bg-surface/50 transition-colors text-left"
+                    >
+                      <div>
+                        <div className="font-medium">
+                          {acc.currency} {acc.type === "current" ? "Current" : "Reserve"}
+                        </div>
+                        <div className="text-sm text-muted-foreground font-mono mt-0.5">
+                          {formatAccount(acc.accountNumber)}
+                        </div>
                       </div>
-                      <div className="text-sm text-muted-foreground font-mono mt-0.5">
-                        {formatAccount(acc.accountNumber)}
-                      </div>
-                    </div>
-                    <ChevronRightIcon className="size-4 text-muted-foreground" />
-                  </button>
-                ))}
+                      <ChevronRightIcon className="size-4 text-muted-foreground" />
+                    </button>
+                  );
+                })}
               </div>
             )}
 
@@ -268,7 +330,7 @@ export default function TransferPage() {
                     onClick={() => {
                       setDestBeneficiary(ben);
                       setDestAccount(null);
-                      setStep(2);
+                      setStep(3);
                     }}
                     className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-surface/30 hover:bg-surface/50 transition-colors text-left"
                   >
@@ -288,26 +350,82 @@ export default function TransferPage() {
                     <ChevronRightIcon className="size-4 text-muted-foreground" />
                   </button>
                 ))}
+              </div>
+            )}
 
-                <button
-                  onClick={() => navigate("/app/beneficiaries")}
-                  className="w-full flex items-center justify-center gap-2 p-4 rounded-lg border border-dashed border-border text-muted-foreground hover:text-foreground hover:bg-surface/30 transition-colors"
+            {destType === "NEW" && (
+              <div className="space-y-4">
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label>Full Name / Company Name</Label>
+                    <Input 
+                      value={newRecipient.fullName} 
+                      onChange={e => setNewRecipient({...newRecipient, fullName: e.target.value})} 
+                      placeholder="e.g. John Doe" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Account Number / IBAN</Label>
+                    <Input 
+                      value={newRecipient.accountNumber} 
+                      onChange={e => setNewRecipient({...newRecipient, accountNumber: e.target.value})} 
+                      placeholder="e.g. 123456789" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Bank Name</Label>
+                    <Input 
+                      value={newRecipient.bankName} 
+                      onChange={e => setNewRecipient({...newRecipient, bankName: e.target.value})} 
+                      placeholder="e.g. Chase Bank" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SWIFT / Routing Code</Label>
+                    <Input 
+                      value={newRecipient.swiftCode} 
+                      onChange={e => setNewRecipient({...newRecipient, swiftCode: e.target.value})} 
+                      placeholder="e.g. BOFAUS3N" 
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>Currency</Label>
+                    <select 
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                      value={newRecipient.currency}
+                      onChange={e => setNewRecipient({...newRecipient, currency: e.target.value})}
+                    >
+                      <option value="USD">USD - US Dollar</option>
+                      <option value="EUR">EUR - Euro</option>
+                      <option value="CHF">CHF - Swiss Franc</option>
+                      <option value="NGN">NGN - Nigerian Naira</option>
+                      <option value="GBP">GBP - British Pound</option>
+                    </select>
+                  </div>
+                </div>
+                <Button 
+                  className="w-full mt-4 h-11" 
+                  onClick={() => {
+                    setDestAccount(null);
+                    setDestBeneficiary(null);
+                    setStep(3);
+                  }}
+                  disabled={!newRecipient.fullName || !newRecipient.accountNumber || !newRecipient.bankName}
                 >
-                  <PlusIcon className="size-4" />
-                  <span className="text-sm font-medium">Add New Payee</span>
-                </button>
+                  Continue
+                </Button>
               </div>
             )}
           </div>
         </div>
       )}
 
-      {/* STEP 2: SOURCE & AMOUNT */}
-      {step === 2 && (
+      {/* STEP 3: AMOUNT */}
+      {step === 3 && (
         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
           <div className="flex items-center gap-2 mb-6">
             <button
-              onClick={() => setStep(1)}
+              onClick={() => setStep(2)}
               className="p-2 -ml-2 rounded-full hover:bg-surface transition-colors"
             >
               <ArrowLeftIcon className="size-4 text-muted-foreground" />
@@ -317,118 +435,71 @@ export default function TransferPage() {
             </h2>
           </div>
 
-          <div className="space-y-2">
-            <Label>Pay From</Label>
-            <div className="grid gap-3">
-              {accounts.map((acc) => {
-                // Don't show the destination account as a source option
-                if (destType === "OWN" && destAccount?.id === acc.id)
-                  return null;
-
-                const isSelected = sourceAccount?.id === acc.id;
-
-                return (
-                  <button
-                    key={acc.id}
-                    onClick={() => setSourceAccount(acc)}
-                    className={cn(
-                      "w-full flex items-center justify-between p-4 rounded-lg border transition-colors text-left",
-                      isSelected
-                        ? "border-primary bg-primary/5 ring-1 ring-primary"
-                        : "border-border bg-surface/30 hover:bg-surface/50",
-                    )}
-                  >
-                    <div>
-                      <div className="font-medium text-foreground">
-                        {acc.currency}{" "}
-                        {acc.type === "current" ? "Current" : "Reserve"}
-                      </div>
-                      <div className="text-sm text-muted-foreground font-mono mt-0.5">
-                        {formatAccount(acc.accountNumber)}
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <div className="font-medium">
-                        {formatAmount(acc.availableBalance, acc.currency)}
-                      </div>
-                      <div className="text-xs text-muted-foreground">
-                        Available
-                      </div>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-
-          {sourceAccount && (
-            <div className="space-y-4 pt-4 animate-in fade-in">
-              <div className="space-y-2">
-                <Label>Amount</Label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                    <span className="text-muted-foreground font-medium">
-                      {sourceAccount.currency}
-                    </span>
-                  </div>
-                  <Input
-                    type="text"
-                    inputMode="decimal"
-                    value={amountStr}
-                    onChange={handleAmountChange}
-                    placeholder="0.00"
-                    className="pl-12 text-lg font-mono h-12"
-                  />
+          <div className="space-y-4 pt-2">
+            <div className="space-y-2">
+              <Label>Amount</Label>
+              <div className="relative">
+                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                  <span className="text-muted-foreground font-medium">
+                    {sourceAccount?.currency}
+                  </span>
                 </div>
-                {numericAmount > sourceAccount.availableBalance && (
-                  <p className="text-xs text-destructive mt-1">
-                    Amount exceeds available balance
-                  </p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                <Label>Reference (Optional)</Label>
                 <Input
-                  value={reference}
-                  onChange={(e) => setReference(e.target.value)}
-                  placeholder="e.g. Invoice #1024"
+                  type="text"
+                  inputMode="decimal"
+                  value={amountStr}
+                  onChange={handleAmountChange}
+                  placeholder="0.00"
+                  className="pl-12 text-lg font-mono h-12"
                 />
               </div>
-
-              {error && step === 2 && (
-                <p className="text-sm text-destructive mt-2">{error}</p>
+              {numericAmount > (sourceAccount?.availableBalance || 0) && (
+                <p className="text-xs text-destructive mt-1">
+                  Amount exceeds available balance
+                </p>
               )}
-              <Button
-                className="w-full h-12 mt-6"
-                disabled={
-                  !numericAmount ||
-                  numericAmount <= 0 ||
-                  numericAmount > sourceAccount.availableBalance ||
-                  quoteLoading
-                }
-                onClick={loadQuote}
-              >
-                {quoteLoading ? (
-                  <>
-                    <Loader2Icon className="mr-2 size-4 animate-spin" />
-                    Generating Quote...
-                  </>
-                ) : (
-                  "Review Transfer"
-                )}
-              </Button>
             </div>
-          )}
+
+            <div className="space-y-2">
+              <Label>Reference (Optional)</Label>
+              <Input
+                value={reference}
+                onChange={(e) => setReference(e.target.value)}
+                placeholder="e.g. Invoice #1024"
+              />
+            </div>
+
+            {error && <p className="text-sm text-destructive mt-2">{error}</p>}
+
+            <Button
+              className="w-full h-12 mt-6"
+              disabled={
+                !numericAmount ||
+                numericAmount <= 0 ||
+                numericAmount > (sourceAccount?.availableBalance || 0) ||
+                quoteLoading
+              }
+              onClick={loadQuote}
+            >
+              {quoteLoading ? (
+                <>
+                  <Loader2Icon className="mr-2 size-4 animate-spin" />
+                  Generating Quote...
+                </>
+              ) : (
+                "Review Transfer"
+              )}
+            </Button>
+          </div>
         </div>
       )}
 
-      {/* STEP 3: REVIEW */}
-      {step === 3 && quote && (
+      {/* STEP 4: REVIEW */}
+      {step === 4 && quote && (
         <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
           <div className="flex items-center gap-2 mb-6">
             <button
-              onClick={() => setStep(2)}
+              onClick={() => setStep(3)}
               className="p-2 -ml-2 rounded-full hover:bg-surface transition-colors"
             >
               <ArrowLeftIcon className="size-4 text-muted-foreground" />
@@ -475,21 +546,25 @@ export default function TransferPage() {
                 <span className="font-medium text-right">
                   {destType === "OWN"
                     ? "My Account"
-                    : destBeneficiary?.fullName}
+                    : destType === "BENEFICIARY" 
+                      ? destBeneficiary?.fullName 
+                      : newRecipient.fullName}
                   <br />
                   <span className="text-muted-foreground font-normal text-xs font-mono">
                     {destType === "OWN"
                       ? formatAccount(destAccount!.accountNumber)
-                      : destBeneficiary?.accountNumber}
+                      : destType === "BENEFICIARY"
+                        ? destBeneficiary?.accountNumber
+                        : newRecipient.accountNumber}
                   </span>
                 </span>
               </div>
 
-              {destType === "BENEFICIARY" && destBeneficiary?.bankName && (
+              {((destType === "BENEFICIARY" && destBeneficiary?.bankName) || (destType === "NEW" && newRecipient.bankName)) && (
                 <div className="flex justify-between">
                   <span className="text-muted-foreground">Bank</span>
                   <span className="font-medium">
-                    {destBeneficiary.bankName}
+                    {destType === "BENEFICIARY" ? destBeneficiary?.bankName : newRecipient.bankName}
                   </span>
                 </div>
               )}
@@ -537,8 +612,6 @@ export default function TransferPage() {
         onSuccess={handleExecute} 
       />
 
-
-
       {/* STEP 5: SUCCESS */}
       {step === 5 && (
         <div className="space-y-6 animate-in zoom-in-95 fade-in duration-500 pt-8">
@@ -581,6 +654,28 @@ export default function TransferPage() {
             </div>
           </Card>
 
+          {destType === "NEW" && !payeeSaved && (
+             <div className="flex flex-col items-center justify-center p-5 bg-primary/5 rounded-lg border border-primary/20 space-y-3 mx-auto max-w-sm mt-4">
+               <p className="text-sm text-center">Do you want to save this recipient as a trusted payee for future transfers?</p>
+               <Button 
+                 variant="secondary" 
+                 onClick={async () => {
+                   await addBeneficiary({
+                     type: 'EXTERNAL',
+                     fullName: newRecipient.fullName,
+                     accountNumber: newRecipient.accountNumber,
+                     bankName: newRecipient.bankName,
+                     swiftCode: newRecipient.swiftCode,
+                     currency: newRecipient.currency
+                   });
+                   setPayeeSaved(true);
+                 }}
+               >
+                 Save Payee
+               </Button>
+             </div>
+          )}
+
           <div className="flex gap-4 pt-6 max-w-sm mx-auto">
             <Button
               variant="outline"
@@ -596,6 +691,9 @@ export default function TransferPage() {
                 setAmountStr("");
                 setReference("");
                 setSourceAccount(null);
+                setDestAccount(null);
+                setDestBeneficiary(null);
+                setNewRecipient({ fullName: "", accountNumber: "", bankName: "", swiftCode: "", currency: "USD" });
               }}
             >
               New Transfer
