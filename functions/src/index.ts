@@ -471,6 +471,32 @@ export const adminUpdateSystemConfig = functions.https.onCall(async (data, conte
   return { success: true, message: 'System configuration updated successfully.' };
 });
 
+// Admin Toggle Access (Grant or Revoke Admin rights)
+export const adminToggleAccess = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const { targetUid, isAdmin } = data;
+  if (!targetUid || typeof isAdmin !== 'boolean') {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters');
+  }
+
+  if (targetUid === context.auth.uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'You cannot change your own admin status.');
+  }
+
+  const user = await getAuth().getUser(targetUid);
+  const currentClaims = user.customClaims || {};
+
+  await getAuth().setCustomUserClaims(targetUid, {
+    ...currentClaims,
+    admin: isAdmin
+  });
+
+  return { success: true, message: `Admin privileges ${isAdmin ? 'granted' : 'revoked'} for ${user.email}.` };
+});
+
 // 2. Manual HTTP trigger to migrate OLD users
 export const runMigration = functions.https.onRequest(async (_req, res) => {
   try {

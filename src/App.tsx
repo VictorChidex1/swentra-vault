@@ -53,6 +53,7 @@ const ADMIN_ROUTES = [
   "/admin/kyc",
   "/admin/transactions",
   "/admin/funding",
+  "/admin/settings",
   "/admin/fees",
   "/admin/exchange-rates",
   "/admin/audit",

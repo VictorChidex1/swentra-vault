@@ -15,8 +15,20 @@ import {
   ActivityIcon,
   Loader2Icon,
   ToggleLeftIcon,
-  ToggleRightIcon
+  ToggleRightIcon,
+  UsersIcon,
+  SearchIcon,
+  UserCheckIcon,
+  UserMinusIcon,
+  PlusIcon
 } from 'lucide-react'
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog"
 
 interface SystemConfig {
   fxMarginPercent: number
@@ -24,6 +36,12 @@ interface SystemConfig {
   swentraTransferFee: number
   transfersEnabled: boolean
   maintenanceMode: boolean
+}
+
+interface AdminUserRecord {
+  uid: string
+  email: string
+  admin: boolean
 }
 
 export default function SettingsPage() {
@@ -35,9 +53,23 @@ export default function SettingsPage() {
 
   const { data: configData, loading: loadingConfig, mutate } = useAdminCache('admin-system-config', fetcher)
   
+  // Users fetcher for Admin Access Management
+  const usersFetcher = useMemo(() => async () => {
+    const adminListUsers = httpsCallable<void, { users: AdminUserRecord[] }>(functions, 'adminListUsers')
+    const result = await adminListUsers()
+    return result.data.users
+  }, [])
+  const { data: usersData, loading: loadingUsers, mutate: mutateUsers } = useAdminCache('admin-users', usersFetcher)
+  const users = usersData || []
+
   const [config, setConfig] = useState<SystemConfig | null>(null)
   const [hasChanges, setHasChanges] = useState(false)
   const [saving, setSaving] = useState(false)
+  
+  const [adminSearch, setAdminSearch] = useState('')
+  const [addAdminSearch, setAddAdminSearch] = useState('')
+  const [togglingAdmin, setTogglingAdmin] = useState<string | null>(null)
+  const [addModalOpen, setAddModalOpen] = useState(false)
 
   // Sync state when cache resolves
   useEffect(() => {
@@ -70,7 +102,32 @@ export default function SettingsPage() {
     }
   }
 
-  if (loadingConfig && !config) {
+  const handleToggleAdmin = async (user: AdminUserRecord) => {
+    try {
+      setTogglingAdmin(user.uid)
+      const adminToggleAccess = httpsCallable<{ targetUid: string, isAdmin: boolean }, { success: boolean, message: string }>(functions, 'adminToggleAccess')
+      const newAdminStatus = !user.admin
+      
+      await adminToggleAccess({ targetUid: user.uid, isAdmin: newAdminStatus })
+      
+      // Update local cache instantly
+      mutateUsers(users.map(u => u.uid === user.uid ? { ...u, admin: newAdminStatus } : u))
+      toast.success(`Admin access ${newAdminStatus ? 'granted to' : 'revoked from'} ${user.email}`)
+    } catch (error: any) {
+      console.error("Failed to toggle admin:", error)
+      toast.error(error.message || "Failed to update admin access.")
+    } finally {
+      setTogglingAdmin(null)
+    }
+  }
+
+  const currentAdmins = users.filter(u => u.admin)
+  const nonAdmins = users.filter(u => !u.admin)
+  
+  const filteredAdmins = currentAdmins.filter(u => u.email.toLowerCase().includes(adminSearch.toLowerCase()))
+  const filteredNonAdmins = nonAdmins.filter(u => u.email.toLowerCase().includes(addAdminSearch.toLowerCase()))
+
+  if ((loadingConfig && !config) || (loadingUsers && users.length === 0)) {
     return (
       <div className="h-full flex items-center justify-center flex-col text-muted-foreground">
         <Loader2Icon className="w-8 h-8 animate-spin text-primary mb-4" />
@@ -205,6 +262,116 @@ export default function SettingsPage() {
                 {config.maintenanceMode ? <ToggleRightIcon className="w-10 h-10" /> : <ToggleLeftIcon className="w-10 h-10" />}
               </button>
             </div>
+          </div>
+        </Card>
+
+        {/* Admin Team Access */}
+        <Card className="p-6 bg-surface border-border flex flex-col gap-6 lg:col-span-2">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between border-b border-border pb-4 gap-4">
+            <div className="flex items-center gap-2">
+              <UsersIcon className="w-5 h-5 text-primary" />
+              <h2 className="text-lg font-medium">Admin Team Access</h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <div className="relative w-full sm:w-64">
+                <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search current admins..."
+                  value={adminSearch}
+                  onChange={(e) => setAdminSearch(e.target.value)}
+                  className="pl-9 h-9 text-sm"
+                />
+              </div>
+
+              <Dialog open={addModalOpen} onOpenChange={setAddModalOpen}>
+                <DialogTrigger asChild>
+                  <Button size="sm" className="shrink-0">
+                    <PlusIcon className="w-4 h-4 mr-2" />
+                    Add Admin
+                  </Button>
+                </DialogTrigger>
+                <DialogContent className="max-w-xl">
+                  <DialogHeader>
+                    <DialogTitle>Grant Admin Access</DialogTitle>
+                  </DialogHeader>
+                  <div className="space-y-4 pt-4">
+                    <div className="relative">
+                      <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search non-admin users by email..."
+                        value={addAdminSearch}
+                        onChange={(e) => setAddAdminSearch(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+                    <div className="max-h-[60vh] overflow-y-auto space-y-2 pr-2 custom-scrollbar">
+                      {filteredNonAdmins.length === 0 ? (
+                        <div className="py-8 text-center text-muted-foreground bg-black/20 rounded-xl border border-border text-sm">
+                          No users found matching "{addAdminSearch}"
+                        </div>
+                      ) : (
+                        filteredNonAdmins.map(user => (
+                          <div key={user.uid} className="flex items-center justify-between p-3 rounded-lg border border-border bg-black/20">
+                            <div className="min-w-0 flex-1 pr-4">
+                              <div className="font-medium text-sm truncate text-white">{user.email}</div>
+                              <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">{user.uid}</div>
+                            </div>
+                            <Button
+                              size="sm"
+                              className="shrink-0 w-24 bg-primary text-primary-foreground hover:bg-primary/90"
+                              onClick={() => handleToggleAdmin(user)}
+                              disabled={togglingAdmin === user.uid}
+                            >
+                              {togglingAdmin === user.uid ? (
+                                <Loader2Icon className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <>
+                                  <UserCheckIcon className="w-3 h-3 mr-1.5" />
+                                  Grant
+                                </>
+                              )}
+                            </Button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {filteredAdmins.length === 0 ? (
+              <div className="col-span-full py-8 text-center text-muted-foreground bg-black/20 rounded-xl border border-border">
+                No active admins found.
+              </div>
+            ) : (
+              filteredAdmins.map(user => (
+                <div key={user.uid} className="flex items-center justify-between p-3 rounded-lg border border-primary/50 bg-primary/5 transition-colors">
+                  <div className="min-w-0 flex-1 pr-4">
+                    <div className="font-medium text-sm truncate">{user.email}</div>
+                    <div className="text-xs text-muted-foreground font-mono truncate mt-0.5">{user.uid}</div>
+                  </div>
+                  <Button
+                    size="sm"
+                    variant="default"
+                    className="shrink-0 w-24 bg-primary text-primary-foreground hover:bg-red-500 hover:text-white"
+                    onClick={() => handleToggleAdmin(user)}
+                    disabled={togglingAdmin === user.uid}
+                  >
+                    {togglingAdmin === user.uid ? (
+                      <Loader2Icon className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <>
+                        <UserMinusIcon className="w-3 h-3 mr-1.5" />
+                        Revoke
+                      </>
+                    )}
+                  </Button>
+                </div>
+              ))
+            )}
           </div>
         </Card>
 
