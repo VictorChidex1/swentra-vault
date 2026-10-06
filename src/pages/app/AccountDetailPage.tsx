@@ -74,21 +74,21 @@ export default function AccountDetailPage() {
         <div className="grid gap-8 md:grid-cols-2">
           <div>
             <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Current Balance
+              Available to spend
             </p>
             <p className="mt-2 font-mono text-4xl text-foreground">
-              {formatCurrency(account.balance, account.currency)}
+              {formatCurrency(account.availableBalance, account.currency)}
             </p>
           </div>
           <div className="border-t border-border pt-4 md:border-l md:border-t-0 md:pl-8 md:pt-0">
             <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Available to spend
+              Settled Ledger
             </p>
             <p className="mt-2 font-mono text-2xl text-foreground">
-              {formatCurrency(account.availableBalance, account.currency)}
+              {formatCurrency(account.balance, account.currency)}
             </p>
             <p className="mt-2 text-xs text-muted-foreground">
-              Excludes pending authorizations and reserved funds.
+              This represents your technical cleared balance.
             </p>
           </div>
         </div>

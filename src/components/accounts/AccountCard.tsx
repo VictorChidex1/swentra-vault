@@ -77,11 +77,11 @@ export function AccountCard({ account }: AccountCardProps) {
 
         <div className="mt-8">
           <p className="font-mono text-2xl text-foreground">
-            {formatCurrency(account.balance, account.currency)}
+            {formatCurrency(account.availableBalance, account.currency)}
           </p>
           <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
             <ArrowRightLeftIcon className="size-3" />
-            <span>Available: {formatCurrency(account.availableBalance, account.currency)}</span>
+            <span>Settled Ledger: {formatCurrency(account.balance, account.currency)}</span>
           </div>
         </div>
       </Card>

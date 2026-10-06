@@ -14,15 +14,15 @@ const CHF_RATES = {
 }
 
 export function TotalBalance({ accounts }: TotalBalanceProps) {
-  // Aggregate all balances into CHF equivalent
+  // Aggregate all available balances into CHF equivalent
   const totalInChf = accounts.reduce((acc, account) => {
-    return acc + account.balance * (CHF_RATES[account.currency] || 0)
+    return acc + (account.availableBalance || 0) * (CHF_RATES[account.currency] || 0)
   }, 0)
 
   return (
     <div className="flex flex-col space-y-1">
       <h2 className="text-sm font-medium uppercase tracking-widest text-muted-foreground">
-        Total Balance
+        Total Available Funds
       </h2>
       
       <motion.div
