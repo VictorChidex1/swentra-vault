@@ -10,6 +10,12 @@
     "source": "functions",
     "predeploy": ["npm --prefix functions run build"]
   },
+  "hosting": {
+    "public": "dist",
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [{ "source": "**", "destination": "/index.html" }],
+    "predeploy": ["npm run build"]
+  },
   "emulators": {
     "auth": { "port": 9099 },
     "firestore": { "port": 8080 },
