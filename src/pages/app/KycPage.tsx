@@ -11,7 +11,7 @@ export default function KycPage() {
       <div className="flex min-h-[50vh] items-center justify-center">
         <div className="flex flex-col items-center gap-4 text-muted-foreground">
           <Loader2Icon className="size-6 animate-spin" />
-          <p className="font-mono text-sm">Verifying node state...</p>
+          <p className="font-mono text-sm">Loading secure environment...</p>
         </div>
       </div>
     )

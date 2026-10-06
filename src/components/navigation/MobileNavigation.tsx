@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { ArrowLeftRight, Clock, Home, LogOutIcon, Menu, Wallet } from 'lucide-react'
 import { NavLink, useNavigate } from 'react-router-dom'
 
@@ -28,6 +29,7 @@ interface MobileNavigationProps {
 export function MobileNavigation({ className }: MobileNavigationProps) {
   const { user, signOut } = useAuth();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(false);
 
   async function handleSignOut() {
     await signOut();
@@ -59,7 +61,7 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
         </NavLink>
       ))}
 
-      <Sheet>
+      <Sheet open={open} onOpenChange={setOpen}>
         <SheetTrigger
           className="flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.65rem] text-muted-foreground"
           aria-label="More navigation"
@@ -79,6 +81,7 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
                 key={item.to}
                 to={item.to}
                 end={item.to === '/app'}
+                onClick={() => setOpen(false)}
                 className={({ isActive }) =>
                   cn(
                     'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
