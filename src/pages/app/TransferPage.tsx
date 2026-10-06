@@ -7,7 +7,6 @@ import {
   PlusIcon,
   CheckCircle2Icon,
   Loader2Icon,
-  LockIcon,
   ArrowLeftIcon,
   RefreshCcwIcon,
   ClockIcon,
@@ -22,6 +21,7 @@ import { Label } from "@/components/ui/label";
 import type { BankAccount } from "@/types/accounts";
 import type { Beneficiary } from "@/types/beneficiary";
 import type { TransactionType, TransferQuote } from "@/types/transactions";
+import { PinVerificationModal } from "@/components/auth/PinVerificationModal";
 import { cn } from "@/lib/utils";
 
 function formatAmount(amount: number, currency: string) {
@@ -55,8 +55,7 @@ export default function TransferPage() {
   const [amountStr, setAmountStr] = useState("");
   const [reference, setReference] = useState("");
 
-  const [authPin, setAuthPin] = useState("");
-  const [isProcessing, setIsProcessing] = useState(false);
+  const [showPinModal, setShowPinModal] = useState(false);
   const [error, setError] = useState("");
   const [txId, setTxId] = useState("");
 
@@ -119,13 +118,8 @@ export default function TransferPage() {
   const numericAmount = parseFloat(amountStr.replace(/,/g, ""));
 
   const handleExecute = async () => {
-    if (authPin.length < 4) {
-      setError("Please enter a valid PIN");
-      return;
-    }
-
     setError("");
-    setIsProcessing(true);
+    setShowPinModal(false);
 
     try {
       let recipientDetails: any = {};
@@ -160,8 +154,6 @@ export default function TransferPage() {
       }
     } catch (err: any) {
       setError(err.message);
-      setIsProcessing(false);
-      setAuthPin("");
     }
   };
 
@@ -186,7 +178,7 @@ export default function TransferPage() {
             </p>
           </div>
           <div className="flex gap-1">
-            {[1, 2, 3, 4].map((i) => (
+            {[1, 2, 3].map((i) => (
               <div
                 key={i}
                 className={cn(
@@ -527,7 +519,7 @@ export default function TransferPage() {
           </Card>
 
           {timeRemaining > 0 ? (
-            <Button className="w-full h-12" onClick={() => setStep(4)}>
+            <Button className="w-full h-12" onClick={() => setShowPinModal(true)}>
               Confirm & Authorize
             </Button>
           ) : (
@@ -539,64 +531,13 @@ export default function TransferPage() {
         </div>
       )}
 
-      {/* STEP 4: AUTHORIZE */}
-      {step === 4 && (
-        <div className="space-y-6 animate-in slide-in-from-right-4 fade-in duration-300">
-          <div className="flex items-center gap-2 mb-6">
-            <button
-              disabled={isProcessing}
-              onClick={() => setStep(3)}
-              className="p-2 -ml-2 rounded-full hover:bg-surface transition-colors disabled:opacity-50"
-            >
-              <ArrowLeftIcon className="size-4 text-muted-foreground" />
-            </button>
-            <h2 className="text-sm font-medium tracking-widest text-muted-foreground uppercase">
-              Authorization
-            </h2>
-          </div>
+      <PinVerificationModal 
+        open={showPinModal} 
+        onOpenChange={setShowPinModal} 
+        onSuccess={handleExecute} 
+      />
 
-          <Card className="p-8 bg-surface/30 border-border text-center">
-            <div className="mx-auto size-12 rounded-full bg-primary/10 flex items-center justify-center mb-6">
-              <LockIcon className="size-6 text-primary" />
-            </div>
-            <h3 className="text-lg font-medium text-foreground mb-2">
-              Secure Authorization
-            </h3>
-            <p className="text-sm text-muted-foreground mb-8">
-              Enter your 4-digit Vault PIN to sign and execute this transaction.
-            </p>
 
-            <div className="max-w-[200px] mx-auto space-y-4">
-              <Input
-                type="password"
-                inputMode="numeric"
-                maxLength={4}
-                className="text-center text-2xl tracking-[1em] font-mono h-14"
-                value={authPin}
-                onChange={(e) => setAuthPin(e.target.value.replace(/\D/g, ""))}
-                disabled={isProcessing}
-              />
-
-              {error && <p className="text-sm text-destructive">{error}</p>}
-
-              <Button
-                className="w-full h-12"
-                onClick={handleExecute}
-                disabled={authPin.length < 4 || isProcessing}
-              >
-                {isProcessing ? (
-                  <>
-                    <Loader2Icon className="mr-2 size-4 animate-spin" />
-                    Processing
-                  </>
-                ) : (
-                  "Execute Transfer"
-                )}
-              </Button>
-            </div>
-          </Card>
-        </div>
-      )}
 
       {/* STEP 5: SUCCESS */}
       {step === 5 && (
@@ -653,7 +594,6 @@ export default function TransferPage() {
               onClick={() => {
                 setStep(1);
                 setAmountStr("");
-                setAuthPin("");
                 setReference("");
                 setSourceAccount(null);
               }}

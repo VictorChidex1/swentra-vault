@@ -24,6 +24,7 @@ import DashboardPage from "@/pages/app/DashboardPage";
 import AccountsPage from "@/pages/app/AccountsPage";
 import AccountDetailPage from "@/pages/app/AccountDetailPage";
 import SettingsPage from "@/pages/app/SettingsPage";
+import AppSecurityPage from "@/pages/app/SecurityPage";
 import BeneficiariesPage from "@/pages/app/BeneficiariesPage";
 import TransferPage from "@/pages/app/TransferPage";
 import TransactionsPage from "@/pages/app/TransactionsPage";
@@ -36,7 +37,7 @@ import KycReviewPage from "@/pages/admin/KycReviewPage";
 import UsersPage from "@/pages/admin/UsersPage";
 import Placeholder from "@/pages/Placeholder";
 
-const CUSTOMER_ROUTES = ["/app/receipts", "/app/security", "/app/support"];
+const CUSTOMER_ROUTES = ["/app/receipts", "/app/support"];
 
 const TRANSFER_STATE_ROUTES = [
   "/app/transfer/review",
@@ -115,6 +116,7 @@ function App() {
               <Route path="/app/accounts/:id" element={<AccountDetailPage />} />
               <Route path="/app/kyc" element={<KycPage />} />
               <Route path="/app/settings" element={<SettingsPage />} />
+              <Route path="/app/security" element={<AppSecurityPage />} />
               <Route
                 path="/app/beneficiaries"
                 element={<BeneficiariesPage />}
