@@ -169,9 +169,9 @@ export default function TransactionsPage() {
       </div>
 
       <Sheet open={!!selectedTx} onOpenChange={(open) => !open && setSelectedTx(null)}>
-        <SheetContent className="w-full sm:max-w-md overflow-y-auto border-l border-border bg-background/95 backdrop-blur-xl">
+        <SheetContent className="w-full sm:max-w-md overflow-y-auto border-l border-border bg-background/95 backdrop-blur-xl p-6 sm:p-8">
           {selectedTx && (
-            <div className="mt-6 space-y-8 animate-in fade-in slide-in-from-right-4 duration-300">
+            <div className="mt-8 space-y-8 animate-in fade-in slide-in-from-right-4 duration-300 pb-12">
               <div className="text-center space-y-2">
                 <div className={cn(
                   "mx-auto flex size-12 items-center justify-center rounded-full mb-4",
