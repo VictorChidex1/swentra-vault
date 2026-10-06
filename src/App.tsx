@@ -4,7 +4,9 @@ import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { RequireAuth } from "@/components/auth/RequireAuth";
 import { RedirectIfAuth } from "@/components/auth/RedirectIfAuth";
+import { RequireAdmin } from "@/components/auth/RequireAdmin";
 import AppLayout from "@/components/layout/AppLayout";
+import AdminLayout from "@/components/layout/AdminLayout";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Toaster } from "@/components/ui/sonner";
 import AboutPage from "@/pages/public/AboutPage";
@@ -25,6 +27,13 @@ import SettingsPage from "@/pages/app/SettingsPage";
 import BeneficiariesPage from "@/pages/app/BeneficiariesPage";
 import TransferPage from "@/pages/app/TransferPage";
 import TransactionsPage from "@/pages/app/TransactionsPage";
+import BootstrapAdminPage from "@/pages/admin/BootstrapAdmin";
+import OverviewPage from "@/pages/admin/OverviewPage";
+import FundingPortalPage from "@/pages/admin/FundingPortalPage";
+import AdminTransactionsPage from "@/pages/admin/TransactionsPage";
+import AdminSettingsPage from "@/pages/admin/SettingsPage";
+import KycReviewPage from "@/pages/admin/KycReviewPage";
+import UsersPage from "@/pages/admin/UsersPage";
 import Placeholder from "@/pages/Placeholder";
 
 const CUSTOMER_ROUTES = ["/app/receipts", "/app/security", "/app/support"];
@@ -111,15 +120,28 @@ function App() {
               />
               <Route path="/app/transfer" element={<TransferPage />} />
               <Route path="/app/transactions" element={<TransactionsPage />} />
+              <Route path="/bootstrap-admin" element={<BootstrapAdminPage />} />
             </Route>
 
-            {ADMIN_ROUTES.map((path) => (
-              <Route
-                key={path}
-                path={path}
-                element={<Placeholder path={path} />}
-              />
-            ))}
+            <Route element={<RequireAdmin />}>
+              <Route element={<AdminLayout />}>
+                {ADMIN_ROUTES.map((path) => (
+                  <Route
+                    key={path}
+                    path={path}
+                    element={
+                      path === "/admin" ? <OverviewPage /> :
+                      path === "/admin/kyc" ? <KycReviewPage /> :
+                      path === "/admin/users" ? <UsersPage /> :
+                      path === "/admin/funding" ? <FundingPortalPage /> :
+                      path === "/admin/transactions" ? <AdminTransactionsPage /> :
+                      path === "/admin/settings" ? <AdminSettingsPage /> :
+                      <Placeholder path={path} />
+                    }
+                  />
+                ))}
+              </Route>
+            </Route>
 
             <Route path="*" element={<Placeholder path="404 — not found" />} />
           </Routes>

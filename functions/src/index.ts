@@ -208,6 +208,269 @@ export const provisionAccounts = functions.auth.user().onCreate(async (user) => 
   console.log(`Successfully provisioned 4 high-entropy currency accounts for new user ${user.uid}`);
 });
 
+// Admin Bootstrapper
+export const bootstrapAdmin = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+  
+  const { secretKey } = data;
+  if (secretKey !== 'SwentraAdmin2026') {
+    throw new functions.https.HttpsError('permission-denied', 'Invalid secret key');
+  }
+
+  await getAuth().setCustomUserClaims(context.auth.uid, { admin: true });
+  
+  // Update the user's profile document to reflect admin status
+  const db = getFirestore();
+  await db.collection('users').doc(context.auth.uid).set({
+    role: 'admin',
+    updatedAt: FieldValue.serverTimestamp()
+  }, { merge: true });
+
+  return { success: true, message: 'You are now an admin. Please sign out and sign back in to refresh your token.' };
+});
+
+// Admin Review KYC
+export const adminReviewKyc = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Must be an admin to perform this action.');
+  }
+
+  const { targetUid, status, rejectionReason } = data;
+  if (!targetUid || !status || !['VERIFIED', 'REJECTED'].includes(status)) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters');
+  }
+
+  const db = getFirestore();
+  const kycRef = db.collection('users').doc(targetUid).collection('kyc').doc('submission');
+  
+  // Verify document exists
+  const doc = await kycRef.get();
+  if (!doc.exists) {
+    throw new functions.https.HttpsError('not-found', 'KYC record not found');
+  }
+
+  await kycRef.update({
+    status: status,
+    reviewedAt: FieldValue.serverTimestamp(),
+    reviewedBy: context.auth.uid,
+    rejectionReason: rejectionReason || null
+  });
+
+  return { success: true, message: `User KYC ${status.toLowerCase()}` };
+});
+
+// Admin List Users
+export const adminListUsers = functions.https.onCall(async (_data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const listUsersResult = await getAuth().listUsers(1000);
+  const db = getFirestore();
+
+  const users = await Promise.all(listUsersResult.users.map(async (u) => {
+    const kycDoc = await db.collection('users').doc(u.uid).collection('kyc').doc('submission').get();
+    const kycStatus = kycDoc.exists ? kycDoc.data()?.status : 'UNVERIFIED';
+
+    // Fetch accounts to get total balance (optional but useful)
+    const accountsSnap = await db.collection('users').doc(u.uid).collection('accounts').get();
+    const accountsCount = accountsSnap.size;
+
+    return {
+      uid: u.uid,
+      email: u.email,
+      creationTime: u.metadata.creationTime,
+      lastSignInTime: u.metadata.lastSignInTime,
+      disabled: u.disabled,
+      admin: !!u.customClaims?.admin,
+      kycStatus,
+      accountsCount
+    };
+  }));
+
+  return { users };
+});
+
+// Admin Toggle User Status (Enable/Disable Login)
+export const adminToggleUserStatus = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const { targetUid, disabled } = data;
+  if (!targetUid || typeof disabled !== 'boolean') {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters');
+  }
+
+  // Prevent disabling self
+  if (targetUid === context.auth.uid) {
+    throw new functions.https.HttpsError('invalid-argument', 'You cannot disable your own admin account.');
+  }
+
+  await getAuth().updateUser(targetUid, { disabled });
+  return { success: true, message: `User account ${disabled ? 'disabled' : 'enabled'}.` };
+});
+
+// Admin Dashboard Stats
+export const adminGetDashboardStats = functions.https.onCall(async (_data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const db = getFirestore();
+  
+  // 1. Total Users
+  const listUsersResult = await getAuth().listUsers(1000);
+  const totalUsers = listUsersResult.users.length;
+
+  // 2. Pending KYC
+  const kycQuery = db.collectionGroup('kyc').where('status', '==', 'UNDER_REVIEW');
+  const kycSnap = await kycQuery.count().get();
+  const pendingKycCount = kycSnap.data().count;
+
+  // 3. Total Accounts
+  const accountsQuery = db.collectionGroup('accounts');
+  const accountsSnap = await accountsQuery.count().get();
+  const totalAccounts = accountsSnap.data().count;
+
+  // 4. Total Transactions (Optional/Future proofing)
+  const txQuery = db.collectionGroup('transactions');
+  const txSnap = await txQuery.count().get();
+  const totalTransactions = txSnap.data().count;
+
+  // 5. Recent Activity Mock Data (Will fetch real data in the future)
+  // For now, let's grab the 5 most recent users as activity
+  const recentUsers = listUsersResult.users
+    .sort((a, b) => new Date(b.metadata.creationTime).getTime() - new Date(a.metadata.creationTime).getTime())
+    .slice(0, 5)
+    .map(u => ({
+      id: u.uid,
+      type: 'user_signup',
+      title: 'New User Registration',
+      description: `${u.email} joined Swentra Vault.`,
+      timestamp: u.metadata.creationTime
+    }));
+
+  return {
+    totalUsers,
+    pendingKycCount,
+    totalAccounts,
+    totalTransactions,
+    recentActivity: recentUsers
+  };
+});
+
+// Admin Process Funding (Deposit/Withdraw)
+export const adminProcessFunding = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const { targetUid, accountId, amount, type, description } = data;
+
+  if (!targetUid || !accountId || !amount || amount <= 0 || !['DEPOSIT', 'WITHDRAWAL'].includes(type) || !description) {
+    throw new functions.https.HttpsError('invalid-argument', 'Missing or invalid parameters');
+  }
+
+  const db = getFirestore();
+  const accountRef = db.collection('users').doc(targetUid).collection('accounts').doc(accountId);
+  const transactionsRef = db.collection('users').doc(targetUid).collection('transactions');
+
+  try {
+    await db.runTransaction(async (transaction) => {
+      const accountDoc = await transaction.get(accountRef);
+      if (!accountDoc.exists) {
+        throw new functions.https.HttpsError('not-found', 'Account not found');
+      }
+
+      const accountData = accountDoc.data()!;
+      const currentAvailable = accountData.availableBalance || 0;
+      const currentLedger = accountData.ledgerBalance || 0;
+
+      if (type === 'WITHDRAWAL' && currentAvailable < amount) {
+        throw new functions.https.HttpsError('failed-precondition', 'Insufficient funds for withdrawal');
+      }
+
+      // Calculate new balances
+      const balanceChange = type === 'DEPOSIT' ? amount : -amount;
+      const newAvailable = currentAvailable + balanceChange;
+      const newLedger = currentLedger + balanceChange;
+
+      // Create transaction record
+      const newTxRef = transactionsRef.doc();
+      const txData = {
+        accountId,
+        type,
+        amount,
+        currency: accountData.currency,
+        status: 'COMPLETED',
+        description,
+        reference: `ADM-${Date.now().toString(36).toUpperCase()}`,
+        timestamp: new Date().toISOString(),
+        metadata: {
+          processedBy: context.auth!.uid,
+          adminAction: true
+        }
+      };
+
+      // Apply updates atomically
+      transaction.update(accountRef, {
+        availableBalance: newAvailable,
+        ledgerBalance: newLedger,
+        updatedAt: new Date().toISOString()
+      });
+      
+      transaction.set(newTxRef, txData);
+    });
+
+    return { success: true, message: `Successfully processed ${type} of ${amount}.` };
+  } catch (error: any) {
+    console.error("Funding transaction failed:", error);
+    throw new functions.https.HttpsError('internal', error.message || 'Transaction failed');
+  }
+});
+
+// Get System Config
+export const adminGetSystemConfig = functions.https.onCall(async (_data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const db = getFirestore();
+  const configDoc = await db.collection('system').doc('config').get();
+  
+  if (!configDoc.exists) {
+    // Return default config if none exists
+    return {
+      fxMarginPercent: 2.0,
+      wireTransferFee: 15.0,
+      swentraTransferFee: 0.0,
+      transfersEnabled: true,
+      maintenanceMode: false
+    };
+  }
+
+  return configDoc.data();
+});
+
+// Update System Config
+export const adminUpdateSystemConfig = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const db = getFirestore();
+  const configRef = db.collection('system').doc('config');
+
+  await configRef.set({
+    ...data,
+    updatedAt: new Date().toISOString(),
+    updatedBy: context.auth.uid
+  }, { merge: true });
+
+  return { success: true, message: 'System configuration updated successfully.' };
+});
+
 // 2. Manual HTTP trigger to migrate OLD users
 export const runMigration = functions.https.onRequest(async (_req, res) => {
   try {

@@ -7,25 +7,46 @@ rules_version = '2';
 // rules and remain the only trusted writer of authoritative financial state.
 service cloud.firestore {
   match /databases/{database}/documents {
+    function isAdmin() {
+      return request.auth != null && request.auth.token.admin == true;
+    }
+
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid || isAdmin();
+      allow write: if isAdmin();
+    }
+
     match /users/{uid}/accounts/{document=**} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false; // Accounts must only be mutated via Cloud Functions
+      allow read: if request.auth != null && request.auth.uid == uid || isAdmin();
+      allow write: if isAdmin(); // Admins can modify accounts if needed
     }
 
     match /users/{uid}/kyc/{document=**} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      // Allow users to submit their KYC application, but not update it once submitted
+      allow read: if request.auth != null && request.auth.uid == uid || isAdmin();
       allow create: if request.auth != null && request.auth.uid == uid 
                     && request.resource.data.status == 'UNDER_REVIEW';
+      allow write: if isAdmin();
     }
 
     match /users/{uid}/beneficiaries/{document=**} {
-      allow read, write: if request.auth != null && request.auth.uid == uid;
+      allow read, write: if request.auth != null && request.auth.uid == uid || isAdmin();
     }
 
     match /users/{uid}/transactions/{document=**} {
-      allow read: if request.auth != null && request.auth.uid == uid;
-      allow write: if false; // Only Cloud Functions mutate transactions
+      allow read: if request.auth != null && request.auth.uid == uid || isAdmin();
+      allow write: if isAdmin(); 
+    }
+
+    match /{path=**}/kyc/{docId} {
+      allow read: if isAdmin();
+    }
+
+    match /{path=**}/accounts/{docId} {
+      allow read: if isAdmin();
+    }
+
+    match /{path=**}/transactions/{docId} {
+      allow read: if isAdmin();
     }
 
     match /{document=**} {
