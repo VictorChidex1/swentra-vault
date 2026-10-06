@@ -17,18 +17,19 @@ import ResetPasswordPage from '@/pages/auth/ResetPasswordPage'
 import VerifyEmailPage from '@/pages/auth/VerifyEmailPage'
 import SecurityPage from '@/pages/public/SecurityPage'
 import TermsPage from '@/pages/public/TermsPage'
+import KycPage from '@/pages/app/KycPage'
+import DashboardPage from '@/pages/app/DashboardPage'
+import AccountsPage from '@/pages/app/AccountsPage'
+import AccountDetailPage from '@/pages/app/AccountDetailPage'
 import Placeholder from '@/pages/Placeholder'
 
 const CUSTOMER_ROUTES = [
-  '/app',
-  '/app/accounts',
   '/app/transfer',
   '/app/beneficiaries',
   '/app/transactions',
   '/app/receipts',
   '/app/security',
   '/app/settings',
-  '/app/kyc',
   '/app/support',
 ]
 
@@ -83,6 +84,10 @@ function App() {
                   element={<Placeholder path={path} />}
                 />
               ))}
+              <Route path="/app" element={<DashboardPage />} />
+              <Route path="/app/accounts" element={<AccountsPage />} />
+              <Route path="/app/accounts/:id" element={<AccountDetailPage />} />
+              <Route path="/app/kyc" element={<KycPage />} />
             </Route>
 
             {ADMIN_ROUTES.map((path) => (

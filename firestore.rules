@@ -7,6 +7,18 @@ rules_version = '2';
 // rules and remain the only trusted writer of authoritative financial state.
 service cloud.firestore {
   match /databases/{database}/documents {
+    match /users/{uid}/accounts/{document=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false; // Accounts must only be mutated via Cloud Functions
+    }
+
+    match /users/{uid}/kyc/{document=**} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      // Allow users to submit their KYC application, but not update it once submitted
+      allow create: if request.auth != null && request.auth.uid == uid 
+                    && request.resource.data.status == 'UNDER_REVIEW';
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }
