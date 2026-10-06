@@ -6,11 +6,31 @@ import { TotalBalance } from '@/components/accounts/TotalBalance'
 import { AccountCard } from '@/components/accounts/AccountCard'
 import { SecurityStateCard } from '@/components/accounts/SecurityStateCard'
 import { KycStatusCard } from '@/components/kyc/KycStatusCard'
+import { useTransactions } from '@/hooks/useTransactions'
+import { ArrowUpRightIcon, ArrowDownLeftIcon } from 'lucide-react'
+import { cn } from '@/lib/utils'
 
+function formatAmount(amount: number, currency: string) {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency,
+    signDisplay: 'always'
+  }).format(amount)
+}
+
+function formatDateShort(dateStr: any) {
+  if (!dateStr) return ''
+  const date = dateStr.toDate ? dateStr.toDate() : new Date(dateStr)
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric'
+  }).format(date)
+}
 export default function DashboardPage() {
   const { accounts, loading: accountsLoading } = useAccounts()
   const { record: kycRecord, status: kycStatus } = useKyc()
-
+  const { transactions, loading: txLoading } = useTransactions()
+  const recentTransactions = transactions.slice(0, 4)
   return (
     <div className="mx-auto max-w-5xl py-6 space-y-8">
       {/* Top Header Section */}
@@ -84,21 +104,65 @@ export default function DashboardPage() {
             </Link>
           )}
 
-          {/* Recent Activity Placeholder */}
+          {/* Recent Activity */}
           <div className="rounded-xl border border-border bg-card">
-            <div className="border-b border-border px-5 py-4">
+            <div className="border-b border-border px-5 py-4 flex items-center justify-between">
               <h4 className="font-mono text-sm font-medium text-foreground">
                 Recent Activity
               </h4>
+              <Link to="/app/transactions" className="text-xs text-primary hover:underline">
+                View All
+              </Link>
             </div>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <p className="font-mono text-xs text-muted-foreground">
-                NO RECENT TRANSACTIONS
-              </p>
-              <p className="mt-1 text-xs text-muted-foreground/70">
-                Your vault activity will appear here.
-              </p>
-            </div>
+            
+            {txLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-primary"></div>
+              </div>
+            ) : recentTransactions.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center">
+                <p className="font-mono text-xs text-muted-foreground">
+                  NO RECENT TRANSACTIONS
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground/70">
+                  Your vault activity will appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="divide-y divide-border">
+                {recentTransactions.map(tx => {
+                  const isOutgoing = tx.amount < 0
+                  return (
+                    <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-surface/50 transition-colors">
+                      <div className="flex items-center gap-3">
+                        <div className={cn(
+                          "flex size-8 items-center justify-center rounded-full shrink-0",
+                          isOutgoing ? "bg-secondary/20 text-muted-foreground" : "bg-primary/20 text-primary"
+                        )}>
+                          {isOutgoing ? <ArrowUpRightIcon className="size-4" /> : <ArrowDownLeftIcon className="size-4" />}
+                        </div>
+                        <div>
+                          <div className="font-medium text-sm text-foreground">
+                            {isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
+                          </div>
+                          <div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider">
+                            {formatDateShort(tx.createdAt)}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className={cn(
+                          "font-mono text-sm",
+                          isOutgoing ? "text-foreground" : "text-primary"
+                        )}>
+                          {formatAmount(tx.amount, tx.currency)}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
           </div>
         </div>
       </div>

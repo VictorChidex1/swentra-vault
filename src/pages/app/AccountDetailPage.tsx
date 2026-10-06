@@ -2,12 +2,30 @@ import { useParams, Link } from 'react-router-dom'
 import { ArrowLeftIcon, DownloadIcon, SendIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { formatCurrency } from '@/types/accounts'
+import { useTransactions } from '@/hooks/useTransactions'
+import { ArrowUpRightIcon, ArrowDownLeftIcon, Loader2Icon } from 'lucide-react'
+import { cn } from '@/lib/utils'
+
+function formatDateShort(dateStr: any) {
+  if (!dateStr) return ''
+  const date = dateStr.toDate ? dateStr.toDate() : new Date(dateStr)
+  return new Intl.DateTimeFormat('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric'
+  }).format(date)
+}
 
 export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { accounts, loading } = useAccounts()
+  const { transactions, loading: txLoading } = useTransactions()
 
   const account = accounts.find((a) => a.id === id)
+  
+  const accountTransactions = transactions.filter(
+    tx => tx.sourceAccountId === account?.id || tx.currency === account?.currency
+  )
 
   if (loading) {
     return (
@@ -71,43 +89,87 @@ export default function AccountDetailPage() {
 
       {/* Balance Overview */}
       <div className="rounded-xl border border-border bg-card p-6 md:p-8">
-        <div className="grid gap-8 md:grid-cols-2">
-          <div>
-            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Available to spend
-            </p>
-            <p className="mt-2 font-mono text-4xl text-foreground">
-              {formatCurrency(account.availableBalance, account.currency)}
-            </p>
-          </div>
-          <div className="border-t border-border pt-4 md:border-l md:border-t-0 md:pl-8 md:pt-0">
-            <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
-              Settled Ledger
-            </p>
-            <p className="mt-2 font-mono text-2xl text-foreground">
-              {formatCurrency(account.balance, account.currency)}
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              This represents your technical cleared balance.
-            </p>
-          </div>
+        <div>
+          <p className="font-mono text-xs uppercase tracking-widest text-muted-foreground">
+            Available to spend
+          </p>
+          <p className="mt-2 font-mono text-4xl text-foreground">
+            {formatCurrency(account.availableBalance, account.currency)}
+          </p>
         </div>
       </div>
 
-      {/* Transaction History (Placeholder for Phase 6) */}
+      {/* Transaction History */}
       <div className="space-y-4">
-        <h3 className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
-          Transaction History
-        </h3>
-        <div className="rounded-xl border border-border bg-card">
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <p className="font-mono text-sm text-muted-foreground">
-              NO TRANSACTIONS FOUND
-            </p>
-            <p className="mt-1 text-sm text-muted-foreground/70">
-              There is no recent activity on this account.
-            </p>
-          </div>
+        <div className="flex items-center justify-between">
+          <h3 className="font-mono text-sm uppercase tracking-widest text-muted-foreground">
+            Transaction History
+          </h3>
+          <Link to="/app/transactions" className="text-xs text-primary hover:underline">
+            View All
+          </Link>
+        </div>
+        
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          {txLoading ? (
+            <div className="flex items-center justify-center py-16">
+              <Loader2Icon className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : accountTransactions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-16 text-center">
+              <p className="font-mono text-sm text-muted-foreground">
+                NO TRANSACTIONS FOUND
+              </p>
+              <p className="mt-1 text-sm text-muted-foreground/70">
+                There is no recent activity on this account.
+              </p>
+            </div>
+          ) : (
+            <div className="divide-y divide-border">
+              {accountTransactions.map(tx => {
+                const isOutgoing = tx.amount < 0
+                return (
+                  <div key={tx.id} className="p-4 sm:p-5 flex items-center justify-between hover:bg-surface/50 transition-colors">
+                    <div className="flex items-center gap-4">
+                      <div className={cn(
+                        "flex size-10 items-center justify-center rounded-full shrink-0",
+                        isOutgoing ? "bg-secondary/20 text-muted-foreground" : "bg-primary/20 text-primary"
+                      )}>
+                        {isOutgoing ? <ArrowUpRightIcon className="size-5" /> : <ArrowDownLeftIcon className="size-5" />}
+                      </div>
+                      <div>
+                        <div className="font-medium text-foreground">
+                          {isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
+                        </div>
+                        <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
+                          <span className="uppercase tracking-wider">{formatDateShort(tx.createdAt)}</span>
+                        </div>
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className={cn(
+                        "font-mono text-base",
+                        isOutgoing ? "text-foreground" : "text-primary"
+                      )}>
+                        {formatCurrency(tx.amount, tx.currency)}
+                      </div>
+                      <div className="mt-1">
+                        <span className={cn(
+                          "inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-medium tracking-wide uppercase",
+                          tx.status === 'COMPLETED' && "text-primary",
+                          tx.status === 'PROCESSING' && "text-secondary-foreground",
+                          tx.status === 'PENDING' && "text-muted-foreground",
+                          tx.status === 'FAILED' && "text-destructive"
+                        )}>
+                          {tx.status}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          )}
         </div>
       </div>
     </div>

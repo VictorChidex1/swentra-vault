@@ -79,10 +79,6 @@ export function AccountCard({ account }: AccountCardProps) {
           <p className="font-mono text-2xl text-foreground">
             {formatCurrency(account.availableBalance, account.currency)}
           </p>
-          <div className="mt-1 flex items-center gap-2 text-xs text-muted-foreground">
-            <ArrowRightLeftIcon className="size-3" />
-            <span>Settled Ledger: {formatCurrency(account.balance, account.currency)}</span>
-          </div>
         </div>
       </Card>
     </motion.div>
