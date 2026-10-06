@@ -22,11 +22,11 @@ import DashboardPage from '@/pages/app/DashboardPage'
 import AccountsPage from '@/pages/app/AccountsPage'
 import AccountDetailPage from '@/pages/app/AccountDetailPage'
 import SettingsPage from '@/pages/app/SettingsPage'
+import BeneficiariesPage from '@/pages/app/BeneficiariesPage'
 import Placeholder from '@/pages/Placeholder'
 
 const CUSTOMER_ROUTES = [
   '/app/transfer',
-  '/app/beneficiaries',
   '/app/transactions',
   '/app/receipts',
   '/app/security',
@@ -89,6 +89,7 @@ function App() {
               <Route path="/app/accounts/:id" element={<AccountDetailPage />} />
               <Route path="/app/kyc" element={<KycPage />} />
               <Route path="/app/settings" element={<SettingsPage />} />
+              <Route path="/app/beneficiaries" element={<BeneficiariesPage />} />
             </Route>
 
             {ADMIN_ROUTES.map((path) => (

@@ -3,6 +3,7 @@ import { MoreHorizontalIcon, ArrowRightLeftIcon } from 'lucide-react'
 import { formatCurrency, type BankAccount } from '@/types/accounts'
 import { Card } from '@/components/ui/card'
 import { useAuth } from '@/hooks/useAuth'
+import { useKyc } from '@/hooks/useKyc'
 
 interface AccountCardProps {
   account: BankAccount
@@ -10,6 +11,7 @@ interface AccountCardProps {
 
 export function AccountCard({ account }: AccountCardProps) {
   const { user } = useAuth()
+  const { record: kycRecord } = useKyc()
   
   // Determine gradient/accents based on currency
   let gradientClass = ''
@@ -36,7 +38,12 @@ export function AccountCard({ account }: AccountCardProps) {
 
   // Format account number nicely: 849201847291 -> 8492 0184 7291
   const formattedNumber = account.accountNumber.replace(/(\d{4})/g, '$1 ').trim()
-  const accountName = user?.displayName || 'Vault Client'
+  
+  const kycName = kycRecord?.personalDetails 
+    ? `${kycRecord.personalDetails.firstName} ${kycRecord.personalDetails.lastName}`.trim()
+    : null
+  
+  const accountName = kycName || user?.displayName || 'Vault Client'
 
   return (
     <motion.div whileHover={{ y: -2 }} transition={{ duration: 0.2 }}>
