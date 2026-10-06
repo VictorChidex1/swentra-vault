@@ -1,5 +1,4 @@
 import { AccountPreview } from '@/components/home/AccountPreview'
-import { Disclaimer } from '@/components/home/Disclaimer'
 import { FinalCta } from '@/components/home/FinalCta'
 import { Hero } from '@/components/home/Hero'
 import { HowItWorks } from '@/components/home/HowItWorks'
@@ -18,7 +17,6 @@ export default function HomePage() {
       <Pricing />
       <Security />
       <HowItWorks />
-      <Disclaimer />
       <FinalCta />
     </>
   )
