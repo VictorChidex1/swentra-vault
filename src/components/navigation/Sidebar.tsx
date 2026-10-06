@@ -1,7 +1,10 @@
-import { NavLink } from 'react-router-dom'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { LogOutIcon } from 'lucide-react'
 
 import { CUSTOMER_NAV } from '@/components/navigation/nav-items'
 import { TerminalStatus } from '@/components/terminal/TerminalStatus'
+import { Button } from '@/components/ui/button'
+import { useAuth } from '@/hooks/useAuth'
 import { cn } from '@/lib/utils'
 
 interface SidebarProps {
@@ -9,6 +12,14 @@ interface SidebarProps {
 }
 
 export function Sidebar({ className }: SidebarProps) {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
+
+  async function handleSignOut() {
+    await signOut();
+    navigate('/');
+  }
+
   return (
     <aside
       className={cn(
@@ -62,11 +73,32 @@ export function Sidebar({ className }: SidebarProps) {
         </ul>
       </nav>
 
-      <div className="border-t border-border px-5 py-4">
+      <div className="border-t border-border px-5 py-4 space-y-2">
         <p className="mb-2 text-[0.65rem] tracking-[0.2em] text-muted-foreground uppercase">
-          Secure session
+          {user ? 'Signed in' : 'Secure session'}
         </p>
-        <TerminalStatus label="Not signed in" tone="muted" />
+        {user ? (
+          <>
+            <p className="truncate text-xs text-muted-foreground">
+              {user.email}
+            </p>
+            <TerminalStatus
+              label={user.emailVerified ? 'Verified' : 'Email not verified'}
+              tone={user.emailVerified ? 'success' : 'warning'}
+            />
+            <Button
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+              onClick={handleSignOut}
+            >
+              <LogOutIcon className="size-4" />
+              Sign out
+            </Button>
+          </>
+        ) : (
+          <TerminalStatus label="Not signed in" tone="muted" />
+        )}
       </div>
     </aside>
   )

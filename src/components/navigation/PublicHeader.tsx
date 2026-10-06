@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { Menu } from "lucide-react";
-import { Link, NavLink } from "react-router-dom";
+import { LogOutIcon, Menu } from "lucide-react";
+import { Link, NavLink, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "motion/react";
 
 import { Button } from "@/components/ui/button";
@@ -13,6 +13,7 @@ import {
   SheetTrigger,
 } from "@/components/ui/sheet";
 import { cn } from "@/lib/utils";
+import { useAuth } from "@/hooks/useAuth";
 
 const NAV_LINKS = [
   { label: "About", to: "/about" },
@@ -20,6 +21,8 @@ const NAV_LINKS = [
 ];
 
 export function PublicHeader() {
+  const { user, signOut } = useAuth();
+  const navigate = useNavigate();
   const [isScrolled, setIsScrolled] = useState(false);
   const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
@@ -134,21 +137,35 @@ export function PublicHeader() {
         </nav>
 
         <div className="hidden items-center gap-3 md:flex relative z-10">
-          <Button
-            asChild
-            variant="ghost"
-            size="sm"
-            className="hover:bg-white/5"
-          >
-            <Link to="/login">Access your account</Link>
-          </Button>
-          <Button
-            asChild
-            size="sm"
-            className="shadow-[0_0_20px_rgba(0,255,102,0.1)] transition-shadow hover:shadow-[0_0_25px_rgba(0,255,102,0.25)]"
-          >
-            <Link to="/register">Open an account</Link>
-          </Button>
+          {user ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="hover:bg-white/5"
+              onClick={() => { signOut(); navigate('/'); }}
+            >
+              <LogOutIcon className="size-4" />
+              Sign out
+            </Button>
+          ) : (
+            <>
+              <Button
+                asChild
+                variant="ghost"
+                size="sm"
+                className="hover:bg-white/5"
+              >
+                <Link to="/login">Access your account</Link>
+              </Button>
+              <Button
+                asChild
+                size="sm"
+                className="shadow-[0_0_20px_rgba(0,255,102,0.1)] transition-shadow hover:shadow-[0_0_25px_rgba(0,255,102,0.25)]"
+              >
+                <Link to="/register">Open an account</Link>
+              </Button>
+            </>
+          )}
         </div>
 
         <Sheet>
@@ -187,22 +204,36 @@ export function PublicHeader() {
               ))}
             </div>
             <div className="flex flex-col gap-2 border-t border-border/50 px-5 py-4">
-              <SheetClose asChild>
-                <Button
-                  asChild
-                  variant="outline"
-                  size="sm"
-                  className="bg-transparent hover:bg-white/5"
-                >
-                  <Link to="/login">Access your account</Link>
-                </Button>
-              </SheetClose>
-              <SheetClose asChild>
-                <Button asChild size="sm">
-                  <Link to="/register">Open an account</Link>
-                </Button>
-              </SheetClose>
-            </div>
+            {user ? (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="bg-transparent hover:bg-white/5"
+                onClick={() => { signOut(); navigate('/'); }}
+              >
+                <LogOutIcon className="size-4" />
+                Sign out
+              </Button>
+            ) : (
+              <>
+                <SheetClose asChild>
+                  <Button
+                    asChild
+                    variant="outline"
+                    size="sm"
+                    className="bg-transparent hover:bg-white/5"
+                  >
+                    <Link to="/login">Access your account</Link>
+                  </Button>
+                </SheetClose>
+                <SheetClose asChild>
+                  <Button asChild size="sm">
+                    <Link to="/register">Open an account</Link>
+                  </Button>
+                </SheetClose>
+              </>
+            )}
+          </div>
           </SheetContent>
         </Sheet>
       </div>
