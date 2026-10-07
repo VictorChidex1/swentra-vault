@@ -33,11 +33,13 @@ export function useAccounts() {
         snapshot.forEach((doc) => {
           accs.push({ id: doc.id, ...doc.data() } as BankAccount)
         })
+        // Filter out system accounts from the regular user dashboard
+        const personalAccs = accs.filter(acc => !acc.isSystemAccount)
         
-        // Custom sort: CHF first, then USD, EUR, NGN
-        const sortedAccs = accs.sort((a, b) => {
-          const order = { CHF: 1, USD: 2, EUR: 3, NGN: 4 }
-          return (order[a.currency] || 99) - (order[b.currency] || 99)
+        // Custom sort: CHF first, then USD, EUR, NGN, GBP
+        const sortedAccs = personalAccs.sort((a, b) => {
+          const order = { CHF: 1, USD: 2, EUR: 3, NGN: 4, GBP: 5 }
+          return (order[a.currency as keyof typeof order] || 99) - (order[b.currency as keyof typeof order] || 99)
         })
 
         setAccounts(sortedAccs)

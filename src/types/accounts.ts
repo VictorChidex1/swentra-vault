@@ -1,6 +1,6 @@
 import type { Timestamp } from 'firebase/firestore'
 
-export type CurrencyCode = 'CHF' | 'USD' | 'EUR' | 'NGN'
+export type CurrencyCode = 'CHF' | 'USD' | 'EUR' | 'NGN' | 'GBP'
 
 export type AccountType = 'current' | 'reserve'
 
@@ -15,6 +15,7 @@ export interface BankAccount {
   balance: number
   availableBalance: number
   status: AccountStatus
+  isSystemAccount?: boolean
   createdAt: Timestamp
 }
 
@@ -23,6 +24,7 @@ export const CURRENCY_SYMBOLS: Record<CurrencyCode, string> = {
   USD: '$',
   EUR: '€',
   NGN: '₦',
+  GBP: '£',
 }
 
 export function formatCurrency(amount: number, currency: CurrencyCode): string {
