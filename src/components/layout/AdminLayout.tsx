@@ -7,7 +7,8 @@ import {
   LogOutIcon,
   SettingsIcon,
   SearchIcon,
-  ActivityIcon
+  ActivityIcon,
+  LandmarkIcon
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -17,6 +18,7 @@ import { cn } from "@/lib/utils";
 const ADMIN_NAVIGATION = [
   { name: "Overview", to: "/admin", icon: ActivityIcon },
   { name: "Users & Accounts", to: "/admin/users", icon: UsersIcon },
+  { name: "Treasury Reserve", to: "/admin/treasury", icon: LandmarkIcon },
   { name: "KYC Review", to: "/admin/kyc", icon: ShieldAlertIcon },
   { name: "Transactions", to: "/admin/transactions", icon: ArrowRightLeftIcon },
   { name: "Funding Portal", to: "/admin/funding", icon: BanknoteIcon },

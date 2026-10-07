@@ -4,7 +4,7 @@ import { db } from '@/lib/firebase'
 import { useAuth } from '@/hooks/useAuth'
 import type { BankAccount } from '@/types/accounts'
 
-export function useAccounts() {
+export function useAccounts(options: { type?: 'personal' | 'system' | 'all' } = { type: 'personal' }) {
   const { user } = useAuth()
   const [accounts, setAccounts] = useState<BankAccount[]>([])
   const [loading, setLoading] = useState(true)
@@ -33,11 +33,16 @@ export function useAccounts() {
         snapshot.forEach((doc) => {
           accs.push({ id: doc.id, ...doc.data() } as BankAccount)
         })
-        // Filter out system accounts from the regular user dashboard
-        const personalAccs = accs.filter(acc => !acc.isSystemAccount)
+        
+        // Filter based on requested type
+        const filteredAccs = accs.filter(acc => {
+          if (options.type === 'system') return acc.isSystemAccount
+          if (options.type === 'personal') return !acc.isSystemAccount
+          return true // 'all'
+        })
         
         // Custom sort: CHF first, then USD, EUR, NGN, GBP
-        const sortedAccs = personalAccs.sort((a, b) => {
+        const sortedAccs = filteredAccs.sort((a, b) => {
           const order = { CHF: 1, USD: 2, EUR: 3, NGN: 4, GBP: 5 }
           return (order[a.currency as keyof typeof order] || 99) - (order[b.currency as keyof typeof order] || 99)
         })

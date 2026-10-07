@@ -35,6 +35,7 @@ import AdminTransactionsPage from "@/pages/admin/TransactionsPage";
 import AdminSettingsPage from "@/pages/admin/SettingsPage";
 import KycReviewPage from "@/pages/admin/KycReviewPage";
 import UsersPage from "@/pages/admin/UsersPage";
+import TreasuryPage from "@/pages/admin/TreasuryPage";
 import Placeholder from "@/pages/Placeholder";
 
 const CUSTOMER_ROUTES = ["/app/receipts", "/app/support"];
@@ -50,6 +51,7 @@ const TRANSFER_STATE_ROUTES = [
 const ADMIN_ROUTES = [
   "/admin",
   "/admin/users",
+  "/admin/treasury",
   "/admin/accounts",
   "/admin/kyc",
   "/admin/transactions",
@@ -136,6 +138,7 @@ function App() {
                       path === "/admin" ? <OverviewPage /> :
                       path === "/admin/kyc" ? <KycReviewPage /> :
                       path === "/admin/users" ? <UsersPage /> :
+                      path === "/admin/treasury" ? <TreasuryPage /> :
                       path === "/admin/funding" ? <FundingPortalPage /> :
                       path === "/admin/transactions" ? <AdminTransactionsPage /> :
                       path === "/admin/settings" ? <AdminSettingsPage /> :
