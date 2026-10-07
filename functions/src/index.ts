@@ -676,6 +676,8 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
       availableBalance: newSourceAvailable
     });
 
+    const sessionId = "1000042" + Date.now().toString() + Math.floor(Math.random() * 10000000000).toString().padStart(10, '0');
+
     // Create Transaction Record for Sender
     const txRef = db.collection(`users/${uid}/transactions`).doc();
     const transactionRecord = {
@@ -691,6 +693,7 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
       exchangeRate,
       reference: reference || 'Funds Transfer',
       status: type === 'EXTERNAL_WIRE' ? 'PROCESSING' : 'COMPLETED',
+      sessionId,
       createdAt: FieldValue.serverTimestamp()
     };
     t.set(txRef, transactionRecord);
@@ -710,6 +713,7 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
         sourceDetails: { senderId: uid },
         reference: reference || 'Incoming Transfer',
         status: 'COMPLETED',
+        sessionId,
         createdAt: FieldValue.serverTimestamp()
       });
     }

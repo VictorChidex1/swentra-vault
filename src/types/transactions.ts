@@ -23,6 +23,7 @@ export interface Transaction {
   recipientDetails?: TransactionRecipientDetails
   sourceDetails?: { senderId: string, senderName?: string }
   exchangeRate?: number
+  sessionId?: string
   status: TransactionStatus
   reference: string
   createdAt: Timestamp | Date
