@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { ArrowRightIcon, RefreshCwIcon, SendIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -9,6 +10,8 @@ import { KycStatusCard } from '@/components/kyc/KycStatusCard'
 import { useTransactions } from '@/hooks/useTransactions'
 import { ArrowUpRightIcon, ArrowDownLeftIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { Transaction } from '@/types/transactions'
+import { TransactionDrawer } from '@/components/transactions/TransactionDrawer'
 
 function formatAmount(amount: number, currency: string) {
   return new Intl.NumberFormat('en-US', {
@@ -31,6 +34,7 @@ export default function DashboardPage() {
   const { record: kycRecord, status: kycStatus } = useKyc()
   const { transactions, loading: txLoading } = useTransactions()
   const recentTransactions = transactions.slice(0, 4)
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
   return (
     <div className="mx-auto max-w-5xl py-6 space-y-8">
       {/* Top Header Section */}
@@ -133,7 +137,11 @@ export default function DashboardPage() {
                 {recentTransactions.map(tx => {
                   const isOutgoing = tx.amount < 0
                   return (
-                    <div key={tx.id} className="p-4 flex items-center justify-between hover:bg-surface/50 transition-colors">
+                    <button 
+                      key={tx.id} 
+                      onClick={() => setSelectedTx(tx)}
+                      className="w-full text-left p-4 flex items-center justify-between hover:bg-surface/50 transition-colors cursor-pointer"
+                    >
                       <div className="flex items-center gap-3">
                         <div className={cn(
                           "flex size-8 items-center justify-center rounded-full shrink-0",
@@ -158,7 +166,7 @@ export default function DashboardPage() {
                           {formatAmount(tx.amount, tx.currency)}
                         </div>
                       </div>
-                    </div>
+                    </button>
                   )
                 })}
               </div>
@@ -166,6 +174,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
+      <TransactionDrawer transaction={selectedTx} onClose={() => setSelectedTx(null)} />
     </div>
   )
 }

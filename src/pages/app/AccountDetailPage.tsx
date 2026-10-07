@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
 import { ArrowLeftIcon, DownloadIcon, SendIcon } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
@@ -5,6 +6,8 @@ import { formatCurrency } from '@/types/accounts'
 import { useTransactions } from '@/hooks/useTransactions'
 import { ArrowUpRightIcon, ArrowDownLeftIcon, Loader2Icon } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import type { Transaction } from '@/types/transactions'
+import { TransactionDrawer } from '@/components/transactions/TransactionDrawer'
 
 function formatDateShort(dateStr: any) {
   if (!dateStr) return ''
@@ -20,6 +23,7 @@ export default function AccountDetailPage() {
   const { id } = useParams<{ id: string }>()
   const { accounts, loading } = useAccounts()
   const { transactions, loading: txLoading } = useTransactions()
+  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
 
   const account = accounts.find((a) => a.id === id)
   
@@ -129,7 +133,11 @@ export default function AccountDetailPage() {
               {accountTransactions.map(tx => {
                 const isOutgoing = tx.amount < 0
                 return (
-                  <div key={tx.id} className="p-4 sm:p-5 flex items-center justify-between hover:bg-surface/50 transition-colors">
+                  <button 
+                    key={tx.id}
+                    onClick={() => setSelectedTx(tx)}
+                    className="w-full text-left p-4 sm:p-5 flex items-center justify-between hover:bg-surface/50 transition-colors cursor-pointer"
+                  >
                     <div className="flex items-center gap-4">
                       <div className={cn(
                         "flex size-10 items-center justify-center rounded-full shrink-0",
@@ -165,13 +173,14 @@ export default function AccountDetailPage() {
                         </span>
                       </div>
                     </div>
-                  </div>
+                  </button>
                 )
               })}
             </div>
           )}
         </div>
       </div>
+      <TransactionDrawer transaction={selectedTx} onClose={() => setSelectedTx(null)} />
     </div>
   )
 }
