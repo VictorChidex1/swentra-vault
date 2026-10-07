@@ -13,6 +13,8 @@ import {
 } from "lucide-react";
 import { useAccounts } from "@/hooks/useAccounts";
 import { useBeneficiaries } from "@/hooks/useBeneficiaries";
+import { useAuth } from "@/hooks/useAuth";
+import { useKyc } from "@/hooks/useKyc";
 import { initiateTransfer, fetchTransferQuote } from "@/services/transactions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
@@ -39,6 +41,13 @@ export default function TransferPage() {
   const navigate = useNavigate();
   const { accounts, loading: accountsLoading } = useAccounts();
   const { beneficiaries, isLoading: beneficiariesLoading, addBeneficiary } = useBeneficiaries();
+  const { user } = useAuth();
+  const { record: kycRecord } = useKyc();
+
+  const kycName = kycRecord?.personalDetails
+    ? `${kycRecord.personalDetails.firstName} ${kycRecord.personalDetails.lastName}`.trim()
+    : null;
+  const accountName = kycName || user?.displayName || "Vault Client";
 
   const [step, setStep] = useState<1 | 2 | 3 | 4 | 5>(1);
 
@@ -237,8 +246,8 @@ export default function TransferPage() {
                 className="w-full flex items-center justify-between p-4 rounded-lg border border-border bg-surface/30 hover:bg-surface/50 transition-colors text-left"
               >
                 <div>
-                  <div className="font-medium text-foreground">
-                    {acc.currency} {acc.type === "current" ? "Current" : "Reserve"}
+                  <div className="font-medium text-foreground uppercase">
+                    {accountName}
                   </div>
                   <div className="text-sm text-muted-foreground font-mono mt-0.5">
                     {formatAccount(acc.accountNumber)}
@@ -532,9 +541,8 @@ export default function TransferPage() {
             <div className="space-y-4 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">From</span>
-                <span className="font-medium text-right">
-                  {sourceAccount!.currency}{" "}
-                  {sourceAccount!.type === "current" ? "Current" : "Reserve"}
+                <span className="font-medium text-right uppercase">
+                  {accountName}
                   <br />
                   <span className="text-muted-foreground font-normal text-xs">
                     {formatAccount(sourceAccount!.accountNumber)}
