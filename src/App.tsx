@@ -36,9 +36,10 @@ import AdminSettingsPage from "@/pages/admin/SettingsPage";
 import KycReviewPage from "@/pages/admin/KycReviewPage";
 import UsersPage from "@/pages/admin/UsersPage";
 import TreasuryPage from "@/pages/admin/TreasuryPage";
+import ReceiptsPage from "@/pages/app/ReceiptsPage";
 import Placeholder from "@/pages/Placeholder";
 
-const CUSTOMER_ROUTES = ["/app/receipts", "/app/support"];
+const CUSTOMER_ROUTES = ["/app/support"];
 
 const TRANSFER_STATE_ROUTES = [
   "/app/transfer/review",
@@ -125,6 +126,7 @@ function App() {
               />
               <Route path="/app/transfer" element={<TransferPage />} />
               <Route path="/app/transactions" element={<TransactionsPage />} />
+              <Route path="/app/receipts" element={<ReceiptsPage />} />
               <Route path="/bootstrap-admin" element={<BootstrapAdminPage />} />
             </Route>
 

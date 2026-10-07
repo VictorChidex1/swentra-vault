@@ -2,9 +2,6 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   ChevronRightIcon,
-  WalletIcon,
-  UsersIcon,
-  PlusIcon,
   CheckCircle2Icon,
   Loader2Icon,
   ArrowLeftIcon,

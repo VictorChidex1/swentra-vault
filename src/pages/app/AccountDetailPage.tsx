@@ -9,7 +9,7 @@ import {
   Loader2Icon 
 } from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
-import { formatCurrency } from '@/types/accounts'
+import { formatCurrency, type CurrencyCode } from '@/types/accounts'
 import { useTransactions } from '@/hooks/useTransactions'
 import { cn } from '@/lib/utils'
 import type { Transaction } from '@/types/transactions'
@@ -165,7 +165,7 @@ export default function AccountDetailPage() {
                         "font-mono text-base",
                         isOutgoing ? "text-foreground" : "text-primary"
                       )}>
-                        {formatCurrency(tx.amount, tx.currency)}
+                        {formatCurrency(tx.amount, tx.currency as CurrencyCode)}
                       </div>
                       <div className="mt-1">
                         <span className={cn(

@@ -15,6 +15,9 @@ import {
   confirmPasswordReset,
   sendEmailVerification,
   applyActionCode,
+  EmailAuthProvider,
+  reauthenticateWithCredential,
+  updatePassword,
 } from 'firebase/auth'
 import { auth } from '@/lib/firebase'
 
@@ -28,6 +31,7 @@ interface AuthContextValue {
   confirmPasswordReset: (oobCode: string, newPassword: string) => Promise<void>
   verifyEmail: () => Promise<void>
   applyVerificationCode: (oobCode: string) => Promise<void>
+  reauthenticateAndChangePassword: (currentPass: string, newPass: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -89,6 +93,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (auth.currentUser) {
         await auth.currentUser.reload()
       }
+    },
+
+    reauthenticateAndChangePassword: async (currentPass, newPass) => {
+      const currentUser = auth.currentUser
+      if (!currentUser?.email) throw new Error('No active user or email')
+      const cred = EmailAuthProvider.credential(currentUser.email, currentPass)
+      await reauthenticateWithCredential(currentUser, cred)
+      await updatePassword(currentUser, newPass)
     },
   }
 

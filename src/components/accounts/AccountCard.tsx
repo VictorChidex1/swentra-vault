@@ -1,5 +1,5 @@
 import { motion } from 'motion/react'
-import { MoreHorizontalIcon, ArrowRightLeftIcon } from 'lucide-react'
+import { MoreHorizontalIcon } from 'lucide-react'
 import { formatCurrency, type BankAccount } from '@/types/accounts'
 import { Card } from '@/components/ui/card'
 import { useAuth } from '@/hooks/useAuth'

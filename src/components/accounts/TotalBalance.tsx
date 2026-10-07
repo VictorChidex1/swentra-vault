@@ -6,11 +6,12 @@ interface TotalBalanceProps {
 }
 
 // Temporary hardcoded conversion rates for the prototype
-const CHF_RATES = {
+const CHF_RATES: Record<string, number> = {
   CHF: 1,
   USD: 0.89, // 1 USD = 0.89 CHF
   EUR: 0.96, // 1 EUR = 0.96 CHF
   NGN: 0.00065, // 1 NGN = 0.00065 CHF
+  GBP: 1.14,
 }
 
 export function TotalBalance({ accounts }: TotalBalanceProps) {

@@ -1,10 +1,9 @@
 import { useState } from 'react'
 import { useTransactions } from '@/hooks/useTransactions'
 import { Card } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { ArrowDownLeftIcon, ArrowUpRightIcon, Loader2Icon, ClockIcon, ChevronRightIcon, CopyIcon, DownloadIcon } from 'lucide-react'
+import { ArrowDownLeftIcon, ArrowUpRightIcon, Loader2Icon, ClockIcon, ChevronRightIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import { toast } from 'sonner'
+
 import type { Transaction } from '@/types/transactions'
 import { TransactionDrawer } from '@/components/transactions/TransactionDrawer'
 
@@ -64,10 +63,7 @@ export default function TransactionsPage() {
     group.items.push(tx)
   })
 
-  const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    toast.success('Reference copied to clipboard')
-  }
+
 
   return (
     <div className="mx-auto max-w-4xl py-6 space-y-8 animate-in fade-in duration-300">

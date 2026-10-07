@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
+import { ChangePasswordModal } from '@/components/settings/ChangePasswordModal'
 
 export default function SettingsPage() {
   const { user } = useAuth()
@@ -17,6 +18,7 @@ export default function SettingsPage() {
   const [isEditingLimits, setIsEditingLimits] = useState(false)
   const [dailyLimit, setDailyLimit] = useState('50000')
   const [monthlyLimit, setMonthlyLimit] = useState('2500000')
+  const [isPasswordModalOpen, setIsPasswordModalOpen] = useState(false)
 
   return (
     <div className="mx-auto max-w-4xl py-6 space-y-8">
@@ -137,9 +139,14 @@ export default function SettingsPage() {
                 <p className="text-sm text-muted-foreground mt-1 mb-4">
                   Ensure your new password is at least 12 characters and highly secure.
                 </p>
-                <Button variant="outline">Change Password</Button>
+                <Button variant="outline" onClick={() => setIsPasswordModalOpen(true)}>Change Password</Button>
               </div>
               
+              <ChangePasswordModal 
+                open={isPasswordModalOpen} 
+                onOpenChange={setIsPasswordModalOpen} 
+              />
+
               <div className="border-t border-border" />
 
               {/* Danger Zone */}

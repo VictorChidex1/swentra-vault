@@ -1,3 +1,4 @@
+import { useState } from "react";
 import {
   ArrowDownLeftIcon,
   ArrowUpRightIcon,
@@ -16,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import type { Transaction } from "@/types/transactions";
 import { useAccounts } from "@/hooks/useAccounts";
+import { ReceiptPreviewModal } from "@/components/receipts/ReceiptPreviewModal";
 
 // Calculates precise settlement progression based on transaction ledger entropy
 function calculateSettlementTimeline(dateStr: any, txId: string) {
@@ -77,6 +79,7 @@ export function TransactionDrawer({
   onClose,
 }: TransactionDrawerProps) {
   const { accounts } = useAccounts();
+  const [showReceipt, setShowReceipt] = useState(false);
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text);
@@ -306,16 +309,22 @@ export function TransactionDrawer({
                 <Button
                   variant="outline"
                   className="w-full"
-                  onClick={() => toast.info("Receipt generation coming soon.")}
+                  onClick={() => setShowReceipt(true)}
                 >
                   <DownloadIcon className="size-4 mr-2" />
-                  Download Receipt
+                  View & Download Receipt
                 </Button>
               </div>
             </div>
           );
         })()}
       </SheetContent>
+
+      <ReceiptPreviewModal 
+        transaction={transaction}
+        open={showReceipt}
+        onOpenChange={setShowReceipt}
+      />
     </Sheet>
   );
 }
