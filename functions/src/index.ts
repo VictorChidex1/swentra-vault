@@ -226,7 +226,43 @@ export const bootstrapAdmin = functions.https.onCall(async (data, context) => {
     updatedAt: FieldValue.serverTimestamp()
   }, { merge: true });
 
-  return { success: true, message: 'You are now an admin. Please sign out and sign back in to refresh your token.' };
+  // Provision Treasury Accounts
+  const currencies = ["USD", "CHF", "EUR", "GBP"];
+  const batch = db.batch();
+  for (const cur of currencies) {
+    const masterRef = db.collection('users').doc(context.auth.uid).collection('accounts').doc(`system-master-${cur.toLowerCase()}`);
+    batch.set(masterRef, {
+      id: `system-master-${cur.toLowerCase()}`,
+      userId: context.auth.uid,
+      accountNumber: `MASTER${cur}`,
+      currency: cur,
+      type: 'reserve',
+      balance: 0,
+      availableBalance: 0,
+      status: 'active',
+      isSystemAccount: true,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+
+    const revenueRef = db.collection('users').doc(context.auth.uid).collection('accounts').doc(`system-revenue-${cur.toLowerCase()}`);
+    batch.set(revenueRef, {
+      id: `system-revenue-${cur.toLowerCase()}`,
+      userId: context.auth.uid,
+      accountNumber: `REVENUE${cur}`,
+      currency: cur,
+      type: 'current',
+      balance: 0,
+      availableBalance: 0,
+      status: 'active',
+      isSystemAccount: true,
+      createdAt: FieldValue.serverTimestamp(),
+      updatedAt: FieldValue.serverTimestamp()
+    }, { merge: true });
+  }
+  await batch.commit();
+
+  return { success: true, message: 'You are now an admin and treasury accounts have been provisioned. Please sign out and sign back in to refresh your token.' };
 });
 
 // Admin Review KYC
@@ -609,6 +645,10 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
 
   if (!quoteId) throw new functions.https.HttpsError('invalid-argument', 'Missing quote ID');
 
+  const adminQuery = await db.collection('users').where('role', '==', 'admin').limit(1).get();
+  if (adminQuery.empty) throw new functions.https.HttpsError('internal', 'Treasury uninitialized');
+  const adminUid = adminQuery.docs[0].id;
+
   return await db.runTransaction(async (t) => {
     // 0. Verify Quote
     const quoteRef = db.collection('transferQuotes').doc(quoteId);
@@ -642,6 +682,8 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
 
     let destinationAccountId: string | null = null;
     let destinationUid: string | null = null;
+    let destRef = null;
+    let destDoc = null;
 
     if (type === 'SWENTRA_TRANSFER' || type === 'INTERNAL_TRANSFER') {
       const accountNumberToFind = recipientDetails.accountNumber.replace(/\s/g, '');
@@ -655,18 +697,51 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
       destinationUid = registryDoc.data()!.assignedTo;
       destinationAccountId = registryDoc.data()!.accountId;
 
-      const destRef = db.collection(`users/${destinationUid}/accounts`).doc(destinationAccountId!);
-      const destDoc = await t.get(destRef);
+      destRef = db.collection(`users/${destinationUid}/accounts`).doc(destinationAccountId!);
+      destDoc = await t.get(destRef);
       if (!destDoc.exists) throw new functions.https.HttpsError('internal', 'Destination account missing');
+    }
 
+    // Ledger System Reads
+    const revenueId = `system-revenue-${sourceData.currency.toLowerCase()}`;
+    const revenueRef = db.collection('users').doc(adminUid).collection('accounts').doc(revenueId);
+    const revenueDoc = await t.get(revenueRef);
+    
+    let masterRef = null;
+    let masterDoc = null;
+    if (type === 'EXTERNAL_WIRE') {
+      const masterId = `system-master-${sourceData.currency.toLowerCase()}`;
+      masterRef = db.collection('users').doc(adminUid).collection('accounts').doc(masterId);
+      masterDoc = await t.get(masterRef);
+    }
+
+    // === ALL READS DONE. START WRITES. === //
+
+    if (destRef && destDoc) {
       const destData = destDoc.data()!;
-      
       const newDestBalance = destData.balance + destinationAmount;
       const newDestAvailable = destData.availableBalance + destinationAmount;
-      
       t.update(destRef, {
         balance: newDestBalance,
         availableBalance: newDestAvailable
+      });
+    }
+
+    if (fee > 0 && revenueDoc.exists) {
+      const revData = revenueDoc.data()!;
+      t.update(revenueRef, {
+        balance: revData.balance + fee,
+        availableBalance: revData.availableBalance + fee,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+
+    if (type === 'EXTERNAL_WIRE' && masterRef && masterDoc && masterDoc.exists) {
+      const masterData = masterDoc.data()!;
+      t.update(masterRef, {
+        balance: masterData.balance + amount, // Amount is principal, so Master takes the liquidity
+        availableBalance: masterData.availableBalance + amount,
+        updatedAt: FieldValue.serverTimestamp()
       });
     }
 
@@ -719,6 +794,215 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
     }
 
     return { success: true, transactionId: txRef.id };
+  });
+});
+
+// Admin Mint Funds (Inject Liquidity)
+export const adminMintFunds = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Must be an admin to perform this action.');
+  }
+
+  const authUid = context.auth.uid;
+  const { currency, amount } = data;
+  if (!currency || !amount || amount <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid currency or amount');
+  }
+
+  const db = getFirestore();
+  const masterId = `system-master-${currency.toLowerCase()}`;
+  const masterRef = db.collection('users').doc(authUid).collection('accounts').doc(masterId);
+
+  return await db.runTransaction(async (t) => {
+    const doc = await t.get(masterRef);
+    if (!doc.exists) {
+      throw new functions.https.HttpsError('not-found', 'Master account not found');
+    }
+
+    const currentData = doc.data()!;
+    const newBalance = currentData.balance + amount;
+    
+    t.update(masterRef, {
+      balance: newBalance,
+      availableBalance: newBalance,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    const txRef = db.collection('users').doc(authUid).collection('transactions').doc();
+    t.set(txRef, {
+      id: txRef.id,
+      userId: authUid,
+      type: 'INTERNAL_TRANSFER',
+      amount: amount,
+      currency,
+      sourceAccountId: 'MINT',
+      reference: 'Central Bank Liquidity Injection',
+      status: 'COMPLETED',
+      sessionId: "MINT_" + Date.now().toString(),
+      createdAt: FieldValue.serverTimestamp()
+    });
+
+    return { success: true, newBalance };
+  });
+});
+
+// Admin Credit Account
+export const adminCreditAccount = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Must be an admin to perform this action.');
+  }
+
+  const authUid = context.auth.uid;
+  const { targetUid, targetAccountId, amount, reference } = data;
+  if (!targetUid || !targetAccountId || !amount || amount <= 0) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters');
+  }
+
+  const db = getFirestore();
+
+  return await db.runTransaction(async (t) => {
+    const destRef = db.collection('users').doc(targetUid).collection('accounts').doc(targetAccountId);
+    const destDoc = await t.get(destRef);
+    if (!destDoc.exists) throw new functions.https.HttpsError('not-found', 'Target account not found');
+
+    const destData = destDoc.data()!;
+    const currency = destData.currency;
+
+    const masterId = `system-master-${currency.toLowerCase()}`;
+    const masterRef = db.collection('users').doc(authUid).collection('accounts').doc(masterId);
+    const masterDoc = await t.get(masterRef);
+    if (!masterDoc.exists) throw new functions.https.HttpsError('not-found', 'Master account not found for currency: ' + currency);
+
+    const masterData = masterDoc.data()!;
+    if (masterData.availableBalance < amount) {
+      throw new functions.https.HttpsError('failed-precondition', 'Insufficient liquidity in master account. Mint funds first.');
+    }
+
+    // Debit Master
+    t.update(masterRef, {
+      balance: masterData.balance - amount,
+      availableBalance: masterData.availableBalance - amount,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    // Credit Target
+    t.update(destRef, {
+      balance: destData.balance + amount,
+      availableBalance: destData.availableBalance + amount,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    const sessionId = "ADMIN_CREDIT_" + Date.now().toString();
+
+    // Master Tx
+    const masterTxRef = db.collection('users').doc(authUid).collection('transactions').doc();
+    t.set(masterTxRef, {
+      id: masterTxRef.id,
+      userId: authUid,
+      type: 'EXTERNAL_WIRE',
+      amount: -amount,
+      currency,
+      sourceAccountId: masterId,
+      recipientDetails: { fullName: 'User Account ' + destData.accountNumber },
+      reference: reference || 'Admin Credit',
+      status: 'COMPLETED',
+      sessionId,
+      createdAt: FieldValue.serverTimestamp()
+    });
+
+    // Target Tx
+    const targetTxRef = db.collection('users').doc(targetUid).collection('transactions').doc();
+    t.set(targetTxRef, {
+      id: targetTxRef.id,
+      userId: targetUid,
+      type: 'INCOMING_TRANSFER',
+      amount: amount,
+      currency,
+      sourceDetails: { senderName: 'Swentra Central' },
+      reference: reference || 'Admin Credit',
+      status: 'COMPLETED',
+      sessionId,
+      createdAt: FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
+  });
+});
+
+// Admin Reverse Transaction
+export const adminReverseTransaction = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Must be an admin to perform this action.');
+  }
+
+  const authUid = context.auth.uid;
+  const { targetUid, transactionId } = data;
+  if (!targetUid || !transactionId) {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters');
+  }
+
+  const db = getFirestore();
+
+  return await db.runTransaction(async (t) => {
+    const txRef = db.collection('users').doc(targetUid).collection('transactions').doc(transactionId);
+    const txDoc = await t.get(txRef);
+    if (!txDoc.exists) throw new functions.https.HttpsError('not-found', 'Transaction not found');
+    
+    const tx = txDoc.data()!;
+    if (tx.reversed) throw new functions.https.HttpsError('failed-precondition', 'Already reversed');
+
+    if (tx.amount >= 0) {
+       throw new functions.https.HttpsError('unimplemented', 'Reversing incoming transfers not supported yet');
+    }
+
+    const sourceAccountId = tx.sourceAccountId;
+    if (!sourceAccountId) throw new functions.https.HttpsError('invalid-argument', 'Transaction has no source account');
+
+    const sourceRef = db.collection('users').doc(targetUid).collection('accounts').doc(sourceAccountId);
+    const sourceDoc = await t.get(sourceRef);
+    if (!sourceDoc.exists) throw new functions.https.HttpsError('not-found', 'Source account not found');
+
+    const sourceData = sourceDoc.data()!;
+    const refundAmount = Math.abs(tx.totalDebit || tx.amount);
+
+    t.update(sourceRef, {
+      balance: sourceData.balance + refundAmount,
+      availableBalance: sourceData.availableBalance + refundAmount,
+      updatedAt: FieldValue.serverTimestamp()
+    });
+
+    const masterId = `system-master-${tx.currency.toLowerCase()}`;
+    const masterRef = db.collection('users').doc(authUid).collection('accounts').doc(masterId);
+    const masterDoc = await t.get(masterRef);
+    
+    if (masterDoc.exists) {
+      const masterData = masterDoc.data()!;
+      t.update(masterRef, {
+        balance: masterData.balance - refundAmount,
+        availableBalance: masterData.availableBalance - refundAmount,
+        updatedAt: FieldValue.serverTimestamp()
+      });
+    }
+
+    // Mark original as reversed
+    t.update(txRef, { reversed: true, reversedAt: FieldValue.serverTimestamp() });
+
+    // Create reversal tx
+    const revTxRef = db.collection('users').doc(targetUid).collection('transactions').doc();
+    t.set(revTxRef, {
+      id: revTxRef.id,
+      userId: targetUid,
+      type: 'INCOMING_TRANSFER',
+      amount: refundAmount,
+      currency: tx.currency,
+      sourceDetails: { senderName: 'Reversal' },
+      reference: 'REVERSAL: ' + tx.id,
+      status: 'COMPLETED',
+      sessionId: "REV_" + tx.id,
+      createdAt: FieldValue.serverTimestamp()
+    });
+
+    return { success: true };
   });
 });
 

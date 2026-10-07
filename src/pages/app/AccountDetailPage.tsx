@@ -1,17 +1,23 @@
 import { useState } from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeftIcon, DownloadIcon, SendIcon } from 'lucide-react'
+import { 
+  ArrowLeftIcon, 
+  DownloadIcon, 
+  SendIcon,
+  ArrowUpRightIcon, 
+  ArrowDownLeftIcon, 
+  Loader2Icon 
+} from 'lucide-react'
 import { useAccounts } from '@/hooks/useAccounts'
 import { formatCurrency } from '@/types/accounts'
 import { useTransactions } from '@/hooks/useTransactions'
-import { ArrowUpRightIcon, ArrowDownLeftIcon, Loader2Icon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { Transaction } from '@/types/transactions'
 import { TransactionDrawer } from '@/components/transactions/TransactionDrawer'
 
-function formatDateShort(dateStr: any) {
+function formatDateShort(dateStr: unknown) {
   if (!dateStr) return ''
-  const date = dateStr.toDate ? dateStr.toDate() : new Date(dateStr)
+  const date = (dateStr as any).toDate ? (dateStr as any).toDate() : new Date(dateStr as string)
   return new Intl.DateTimeFormat('en-US', {
     month: 'short',
     day: 'numeric',
