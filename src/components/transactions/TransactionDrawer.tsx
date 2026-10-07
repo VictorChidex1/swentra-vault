@@ -1,34 +1,21 @@
-import { CopyIcon, DownloadIcon, AlertCircleIcon, CheckIcon, CheckCircle2Icon } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import {
+  ArrowDownLeftIcon,
+  ArrowUpRightIcon,
+  CopyIcon,
+  DownloadIcon,
+  CheckIcon,
+} from "lucide-react";
+import { cn } from "@/lib/utils";
 import {
   Sheet,
   SheetContent,
-} from '@/components/ui/sheet'
-import { Button } from '@/components/ui/button'
-import { toast } from 'sonner'
-import type { Transaction } from '@/types/transactions'
-import { useAccounts } from '@/hooks/useAccounts'
-
-function formatAmount(amount: number, currency: string) {
-  return new Intl.NumberFormat('en-US', {
-    style: 'currency',
-    currency,
-    signDisplay: 'always'
-  }).format(amount)
-}
-
-function formatDate(dateStr: any) {
-  if (!dateStr) return ''
-  const date = dateStr.toDate ? dateStr.toDate() : new Date(dateStr)
-  return new Intl.DateTimeFormat('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-    hour: 'numeric',
-    minute: '2-digit',
-    second: '2-digit',
-  }).format(date)
-}
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
+import type { Transaction } from "@/types/transactions";
+import { useAccounts } from "@/hooks/useAccounts";
 
 // Generates fake intermediate timestamps based on createdAt to make the timeline look real
 function getTimelineDates(dateStr: any) {
@@ -57,184 +44,275 @@ function getTimelineDates(dateStr: any) {
   }
 }
 
-interface TransactionDrawerProps {
-  transaction: Transaction | null
-  onClose: () => void
+function formatAmount(amount: number, currency: string) {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency,
+    signDisplay: "always",
+  }).format(amount);
 }
 
-export function TransactionDrawer({ transaction, onClose }: TransactionDrawerProps) {
-  const { accounts } = useAccounts()
-  
+function formatDate(dateStr: any) {
+  if (!dateStr) return "";
+  const date = dateStr.toDate ? dateStr.toDate() : new Date(dateStr);
+  return new Intl.DateTimeFormat("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  }).format(date);
+}
+
+interface TransactionDrawerProps {
+  transaction: Transaction | null;
+  onClose: () => void;
+}
+
+export function TransactionDrawer({
+  transaction,
+  onClose,
+}: TransactionDrawerProps) {
+  const { accounts } = useAccounts();
+
   const copyToClipboard = (text: string) => {
-    navigator.clipboard.writeText(text)
-    toast.success('Copied to clipboard')
-  }
-
-  if (!transaction) return null
-
-  // Payment Method Lookup
-  const sourceAccount = accounts.find(a => a.id === transaction.sourceAccountId)
-  const paymentMethod = sourceAccount ? `${sourceAccount.currency} ${sourceAccount.type === 'current' ? 'Current' : 'Reserve'}` : 'Vault Account'
-
-  // Titles & Headings
-  const isOutgoing = transaction.amount < 0
-  const title = isOutgoing
-    ? `Transfer to ${transaction.recipientDetails?.fullName || transaction.recipientDetails?.accountNumber || 'Unknown'}`
-    : `Received from ${transaction.sourceDetails?.senderName || 'Unknown'}`
-
-  // Timeline State
-  const timelineDates = getTimelineDates(transaction.createdAt)
-  
-  const steps = [
-    { label: 'Payment successful', date: timelineDates.payment, completed: true },
-    { label: 'Processing by bank', date: timelineDates.processing, completed: transaction.status === 'COMPLETED' || transaction.status === 'PROCESSING' },
-    { label: 'Received by bank', date: timelineDates.received, completed: transaction.status === 'COMPLETED' },
-  ]
-
-  // Overall Status Text
-  const statusColor = 
-    transaction.status === 'COMPLETED' ? 'text-[#10b981]' : 
-    transaction.status === 'PROCESSING' ? 'text-[#f59e0b]' : 
-    transaction.status === 'FAILED' ? 'text-[#ef4444]' : 'text-[#6b7280]'
-    
-  const statusText = 
-    transaction.status === 'COMPLETED' ? 'Successful' : 
-    transaction.status === 'PROCESSING' ? 'Processing' : 
-    transaction.status === 'FAILED' ? 'Failed' : 'Pending'
+    navigator.clipboard.writeText(text);
+    toast.success("Reference copied to clipboard");
+  };
 
   return (
     <Sheet open={!!transaction} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="w-full sm:max-w-md p-0 overflow-y-auto bg-[#1a1a1a] border-l border-[#2e2e2e]">
-        
-        {/* Top App Bar area (simulated) */}
-        <div className="flex items-center justify-between p-4 bg-[#1a1a1a]">
-          <button onClick={onClose} className="p-2 hover:bg-white/5 rounded-full">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-          <span className="font-semibold text-white tracking-wide">Transaction Details</span>
-          <div className="p-2 text-[#10b981]">
-            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-        </div>
+      <SheetContent
+        side="right"
+        className="w-full sm:max-w-md p-6 sm:p-8 overflow-y-auto"
+      >
+        <SheetHeader className="mb-8">
+          <SheetTitle className="font-mono text-sm tracking-widest text-muted-foreground uppercase">
+            Transaction Details
+          </SheetTitle>
+        </SheetHeader>
 
-        <div className="p-4 space-y-4">
-          {/* Main Card */}
-          <div className="bg-[#242424] rounded-2xl p-6 flex flex-col items-center relative mt-6">
-            
-            {/* Logo Badge */}
-            <div className="absolute -top-6 bg-white w-12 h-12 rounded-full flex items-center justify-center shadow-lg border-[3px] border-[#242424]">
-               <div className="bg-[#0066ff] w-8 h-8 rounded-full flex items-center justify-center">
-                 <span className="text-white font-bold text-lg">M</span>
-               </div>
-            </div>
+        {transaction && (() => {
+          const sourceAccount = accounts.find(a => a.id === transaction.sourceAccountId)
+          const paymentMethod = sourceAccount ? `${sourceAccount.currency} ${sourceAccount.type === 'current' ? 'Current' : 'Reserve'}` : 'Vault Account'
+          
+          const timelineDates = getTimelineDates(transaction.createdAt)
+          const steps = [
+            { label: 'Payment successful', date: timelineDates.payment, completed: true },
+            { label: 'Processing by bank', date: timelineDates.processing, completed: true },
+            { label: 'Received by bank', date: timelineDates.received, completed: true },
+          ]
 
-            <div className="text-center mt-6 space-y-2">
-              <h3 className="text-white/90 text-sm font-medium px-4">{title}</h3>
-              <h1 className="text-4xl font-bold text-white tracking-tight">
-                {formatAmount(Math.abs(transaction.amount), transaction.currency)}
-              </h1>
-              <p className={cn("font-medium", statusColor)}>{statusText}</p>
-            </div>
-
-            {/* Stepper Timeline */}
-            <div className="w-full mt-10">
-              <div className="flex justify-between relative px-2">
-                {/* Connecting Lines */}
-                <div className="absolute top-3 left-8 right-8 flex justify-between z-0">
-                  <div className={cn("h-[2px] w-1/2", steps[1].completed ? "bg-[#10b981]" : "bg-[#3f3f3f]")} />
-                  <div className={cn("h-[2px] w-1/2", steps[2].completed ? "bg-[#10b981]" : "bg-[#3f3f3f]")} />
-                </div>
-                
-                {/* Step Nodes */}
-                {steps.map((step, i) => (
-                  <div key={i} className="flex flex-col items-center z-10 w-24">
-                    <div className={cn(
-                      "w-6 h-6 rounded-full flex items-center justify-center mb-2",
-                      step.completed ? "bg-[#10b981]" : "bg-[#3f3f3f]"
-                    )}>
-                      {step.completed && <CheckIcon className="w-4 h-4 text-white" strokeWidth={3} />}
-                    </div>
-                    <span className="text-xs text-white/90 text-center leading-tight mb-1">{step.label}</span>
-                    <span className="text-[10px] text-white/40">{step.completed ? step.date : '--'}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Disclaimer */}
-            <div className="mt-8 bg-[#1f1f1f] rounded-xl p-4 w-full">
-              <p className="text-xs text-white/50 text-center leading-relaxed">
-                The recipient account is expected to be credited within 5 minutes, subject to notification by the bank.
-              </p>
-            </div>
-          </div>
-
-          {/* Details Card */}
-          <div className="bg-[#242424] rounded-2xl p-6">
-            <h3 className="text-white font-semibold text-lg mb-6">Transaction Details</h3>
-            
-            <div className="space-y-5">
-              <div className="flex justify-between items-start gap-4">
-                <span className="text-white/50 text-sm whitespace-nowrap">Recipient Details</span>
-                <div className="text-right flex flex-col">
-                  <span className="text-white text-sm">
-                    {transaction.recipientDetails?.fullName || 'N/A'}
-                  </span>
-                  <span className="text-white/70 text-xs mt-1">
-                    {transaction.recipientDetails?.bankName || 'SWENTRA VAULT'} | {transaction.recipientDetails?.accountNumber || ''}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-white/50 text-sm">Transaction No.</span>
-                <div className="flex items-center gap-2 text-white text-sm">
-                  {transaction.id}
-                  <button onClick={() => copyToClipboard(transaction.id)} className="text-white/40 hover:text-white">
-                    <CopyIcon className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-white/50 text-sm">Payment Method</span>
-                <div className="flex items-center gap-1 text-white text-sm">
-                  {paymentMethod}
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-white/40"><path d="m9 18 6-6-6-6"/></svg>
-                </div>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-white/50 text-sm">Transaction Date</span>
-                <span className="text-white text-sm">{formatDate(transaction.createdAt)}</span>
-              </div>
-
-              <div className="flex justify-between items-center">
-                <span className="text-white/50 text-sm">Session ID</span>
-                <div className="flex items-center gap-2 text-white text-sm">
-                  {transaction.sessionId || 'N/A'}
-                  {transaction.sessionId && (
-                    <button onClick={() => copyToClipboard(transaction.sessionId)} className="text-white/40 hover:text-white">
-                      <CopyIcon className="w-4 h-4" />
-                    </button>
+          return (
+            <div className="space-y-8 animate-in slide-in-from-right-8 fade-in duration-300">
+              {/* Header Amount */}
+              <div className="flex flex-col items-center justify-center space-y-4 py-4">
+                <div
+                  className={cn(
+                    "flex size-16 items-center justify-center rounded-full shadow-inner",
+                    transaction.amount < 0
+                      ? "bg-secondary/20 text-muted-foreground"
+                      : "bg-primary/20 text-primary",
+                  )}
+                >
+                  {transaction.amount < 0 ? (
+                    <ArrowUpRightIcon className="size-6" />
+                  ) : (
+                    <ArrowDownLeftIcon className="size-6" />
                   )}
                 </div>
+                <h2 className="text-4xl font-light tracking-tight text-foreground">
+                  {formatAmount(transaction.amount, transaction.currency)}
+                </h2>
+                <div className="flex justify-center pt-2">
+                  <span
+                    className={cn(
+                      "inline-flex items-center rounded-full px-2.5 py-1 text-[0.7rem] font-medium tracking-wide uppercase",
+                      transaction.status === "COMPLETED" &&
+                        "bg-primary/10 text-primary",
+                      transaction.status === "PROCESSING" &&
+                        "bg-secondary text-secondary-foreground",
+                      transaction.status === "PENDING" &&
+                        "bg-muted text-muted-foreground",
+                      transaction.status === "FAILED" &&
+                        "bg-destructive/10 text-destructive",
+                    )}
+                  >
+                    {transaction.status}
+                  </span>
+                </div>
+              </div>
+
+              {/* Stepper Timeline */}
+              <div className="w-full mt-8 pb-2">
+                <div className="flex justify-between relative px-2">
+                  {/* Connecting Lines */}
+                  <div className="absolute top-3 left-8 right-8 flex justify-between z-0">
+                    <div className={cn("h-[2px] w-1/2", steps[1].completed ? "bg-primary" : "bg-muted")} />
+                    <div className={cn("h-[2px] w-1/2", steps[2].completed ? "bg-primary" : "bg-muted")} />
+                  </div>
+                  
+                  {/* Step Nodes */}
+                  {steps.map((step, i) => (
+                    <div key={i} className="flex flex-col items-center z-10 w-24">
+                      <div className={cn(
+                        "w-6 h-6 rounded-full flex items-center justify-center mb-2",
+                        step.completed ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"
+                      )}>
+                        {step.completed && <CheckIcon className="w-4 h-4" strokeWidth={3} />}
+                      </div>
+                      <span className="text-[0.65rem] font-medium uppercase tracking-wider text-muted-foreground text-center leading-tight mb-1">{step.label}</span>
+                      <span className="text-[10px] text-muted-foreground/50">{step.completed ? step.date : '--'}</span>
+                    </div>
+                  ))}
+                </div>
+                <div className="mt-8 bg-surface/30 rounded-xl p-4 w-full border border-border">
+                  <p className="text-xs text-muted-foreground text-center leading-relaxed">
+                    The recipient account is expected to be credited within 5 minutes, subject to notification by the bank.
+                  </p>
+                </div>
+              </div>
+
+              <div className="space-y-6 pt-4">
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium tracking-widest text-muted-foreground uppercase border-b border-border pb-2">
+                    Transaction Info
+                  </h3>
+
+                  <div className="flex justify-between items-start text-sm">
+                    <span className="text-muted-foreground">
+                      {transaction.amount < 0 ? "Sent to" : "Received from"}
+                    </span>
+                    <span className="font-medium text-right max-w-[200px]">
+                      {transaction.amount < 0
+                        ? transaction.recipientDetails?.fullName
+                        : transaction.sourceDetails?.senderName}
+                      <br />
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {transaction.amount < 0
+                          ? transaction.recipientDetails?.accountNumber
+                          : transaction.sourceAccountId}
+                      </span>
+                    </span>
+                  </div>
+
+                  {transaction.recipientDetails?.bankName && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Bank Name</span>
+                      <span className="font-medium">
+                        {transaction.recipientDetails.bankName}
+                      </span>
+                    </div>
+                  )}
+
+                  {transaction.recipientDetails?.swiftCode && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">SWIFT / BIC</span>
+                      <span className="font-mono font-medium">
+                        {transaction.recipientDetails.swiftCode}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Transaction No.</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs bg-surface/50 px-2 py-1 rounded-md">
+                        {transaction.id}
+                      </span>
+                      <button
+                        onClick={() => copyToClipboard(transaction.id)}
+                        className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface rounded-md transition-colors"
+                      >
+                        <CopyIcon className="size-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Payment Method</span>
+                    <span className="font-medium">{paymentMethod}</span>
+                  </div>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Date & Time</span>
+                    <span className="font-medium">
+                      {formatDate(transaction.createdAt)}
+                    </span>
+                  </div>
+
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-muted-foreground">Session ID</span>
+                    <div className="flex items-center gap-2">
+                      <span className="font-mono text-xs bg-surface/50 px-2 py-1 rounded-md">
+                        {transaction.sessionId || 'N/A'}
+                      </span>
+                      {transaction.sessionId && (
+                        <button
+                          onClick={() => copyToClipboard(transaction.sessionId!)}
+                          className="p-1.5 text-muted-foreground hover:text-foreground hover:bg-surface rounded-md transition-colors"
+                        >
+                          <CopyIcon className="size-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium tracking-widest text-muted-foreground uppercase border-b border-border pb-2">
+                    Financial Breakdown
+                  </h3>
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">
+                      Principal Amount
+                    </span>
+                    <span className="font-medium">
+                      {formatAmount(
+                        Math.abs(transaction.amount),
+                        transaction.currency,
+                      )}
+                    </span>
+                  </div>
+
+                  {transaction.exchangeRate && transaction.exchangeRate !== 1 && (
+                    <div className="flex justify-between text-sm">
+                      <span className="text-muted-foreground">Exchange Rate</span>
+                      <span className="font-medium">
+                        {transaction.exchangeRate.toFixed(4)}
+                      </span>
+                    </div>
+                  )}
+
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Transfer Fee</span>
+                    <span className="font-medium">
+                      {transaction.amount < 0
+                        ? transaction.type === "INTERNAL_TRANSFER"
+                          ? "$0.00"
+                          : "Included"
+                        : "$0.00"}
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="pt-8">
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => toast.info("Receipt generation coming soon.")}
+                >
+                  <DownloadIcon className="size-4 mr-2" />
+                  Download Receipt
+                </Button>
               </div>
             </div>
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-4 pt-4 pb-8">
-            <Button variant="outline" className="flex-1 bg-[#1a2e26] text-[#10b981] border-none hover:bg-[#1a2e26]/80 rounded-full h-12 text-base font-semibold">
-              Report Issue
-            </Button>
-            <Button className="flex-1 bg-[#10b981] text-white hover:bg-[#10b981]/90 rounded-full h-12 text-base font-semibold" onClick={() => toast.success('Receipt download started')}>
-              Share Receipt
-            </Button>
-          </div>
-          
-        </div>
+          );
+        })()}
       </SheetContent>
     </Sheet>
-  )
+  );
 }
