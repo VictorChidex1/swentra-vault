@@ -36,11 +36,18 @@ export default function TreasuryPage() {
     const parts = val.split('.')
     if (parts.length > 2) val = parts[0] + '.' + parts.slice(1).join('')
     if (parts[1]?.length > 2) val = val.substring(0, val.indexOf('.') + 3)
-    setAmount(val)
+    
+    // Add commas to the integer part
+    const formattedParts = val.split('.')
+    if (formattedParts[0]) {
+      formattedParts[0] = formattedParts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',')
+    }
+    setAmount(formattedParts.join('.'))
   }
 
   const handleMint = async () => {
-    const numAmount = parseFloat(amount)
+    const cleanAmount = amount.replace(/,/g, '')
+    const numAmount = parseFloat(cleanAmount)
     if (isNaN(numAmount) || numAmount <= 0) {
       toast.error('Enter a valid amount to mint')
       return
@@ -126,7 +133,7 @@ export default function TreasuryPage() {
 
             <Button
               onClick={handleMint}
-              disabled={minting || !amount || parseFloat(amount) <= 0}
+              disabled={minting || !amount || parseFloat(amount.replace(/,/g, '')) <= 0}
               className="w-full h-12 bg-[#00E559] hover:bg-[#00CC4E] text-black font-medium text-lg rounded-xl transition-all duration-300"
             >
               {minting ? (
