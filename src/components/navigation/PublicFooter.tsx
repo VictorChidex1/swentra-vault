@@ -18,6 +18,7 @@ const PRODUCT_LINKS: FooterLink[] = [
 const LEGAL_LINKS: FooterLink[] = [
   { label: 'Terms', to: '/terms' },
   { label: 'Privacy', to: '/privacy' },
+  { label: 'AML & KYC Compliance', to: '/compliance' },
 ]
 
 const ACCOUNT_LINKS: FooterLink[] = [

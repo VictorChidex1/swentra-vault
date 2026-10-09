@@ -13,6 +13,7 @@ import AboutPage from "@/pages/public/AboutPage";
 import HomePage from "@/pages/public/HomePage";
 import LoginPage from "@/pages/auth/LoginPage";
 import PrivacyPage from "@/pages/public/PrivacyPage";
+import CompliancePage from "@/pages/public/CompliancePage";
 import RegisterPage from "@/pages/auth/RegisterPage";
 import ForgotPasswordPage from "@/pages/auth/ForgotPasswordPage";
 import ResetPasswordPage from "@/pages/auth/ResetPasswordPage";
@@ -81,6 +82,7 @@ function App() {
               <Route path="/security" element={<SecurityPage />} />
               <Route path="/terms" element={<TermsPage />} />
               <Route path="/privacy" element={<PrivacyPage />} />
+              <Route path="/compliance" element={<CompliancePage />} />
             </Route>
 
             <Route
