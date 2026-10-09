@@ -576,12 +576,34 @@ export const getTransferQuote = functions.https.onCall(async (data, context) => 
   let rawRate = 1.0;
   if (sourceCurrency !== destinationCurrency) {
     try {
+      // Frankfurter API does not support NGN, so if either currency is NGN, we bypass it.
+      if (sourceCurrency === 'NGN' || destinationCurrency === 'NGN') {
+        throw new Error('Unsupported currency in live API, fallback to treasury rates');
+      }
+
       const response = await fetch(`https://api.frankfurter.app/latest?from=${sourceCurrency}&to=${destinationCurrency}`);
       if (!response.ok) throw new Error('FX API failed');
       const fxData: any = await response.json();
       rawRate = fxData.rates[destinationCurrency];
     } catch (error) {
-      throw new functions.https.HttpsError('unavailable', 'Exchange rate service is currently down');
+      // Fallback to internal treasury rates pegged to USD
+      const TREASURY_RATES: Record<string, number> = {
+        USD: 1.0,
+        EUR: 0.92,
+        CHF: 0.90,
+        GBP: 0.77,
+        NGN: 1650.00
+      };
+
+      const sourceInUSD = TREASURY_RATES[sourceCurrency];
+      const destInUSD = TREASURY_RATES[destinationCurrency];
+
+      if (!sourceInUSD || !destInUSD) {
+        throw new functions.https.HttpsError('unavailable', 'Exchange rate service is currently down [503]');
+      }
+
+      // Calculate cross rate
+      rawRate = destInUSD / sourceInUSD;
     }
   }
 

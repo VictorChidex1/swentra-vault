@@ -37,9 +37,10 @@ import KycReviewPage from "@/pages/admin/KycReviewPage";
 import UsersPage from "@/pages/admin/UsersPage";
 import TreasuryPage from "@/pages/admin/TreasuryPage";
 import ReceiptsPage from "@/pages/app/ReceiptsPage";
+import SupportPage from "@/pages/app/SupportPage";
 import Placeholder from "@/pages/Placeholder";
 
-const CUSTOMER_ROUTES = ["/app/support"];
+const CUSTOMER_ROUTES: string[] = [];
 
 const TRANSFER_STATE_ROUTES = [
   "/app/transfer/review",
@@ -120,6 +121,7 @@ function App() {
               <Route path="/app/kyc" element={<KycPage />} />
               <Route path="/app/settings" element={<SettingsPage />} />
               <Route path="/app/security" element={<AppSecurityPage />} />
+              <Route path="/app/support" element={<SupportPage />} />
               <Route
                 path="/app/beneficiaries"
                 element={<BeneficiariesPage />}
