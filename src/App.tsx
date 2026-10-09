@@ -36,6 +36,7 @@ import AdminSettingsPage from "@/pages/admin/SettingsPage";
 import KycReviewPage from "@/pages/admin/KycReviewPage";
 import UsersPage from "@/pages/admin/UsersPage";
 import TreasuryPage from "@/pages/admin/TreasuryPage";
+import AdminSupportTicketsPage from "@/pages/admin/SupportTicketsPage";
 import ReceiptsPage from "@/pages/app/ReceiptsPage";
 import SupportPage from "@/pages/app/SupportPage";
 import Placeholder from "@/pages/Placeholder";
@@ -59,6 +60,7 @@ const ADMIN_ROUTES = [
   "/admin/transactions",
   "/admin/funding",
   "/admin/settings",
+  "/admin/support",
   "/admin/fees",
   "/admin/exchange-rates",
   "/admin/audit",
@@ -146,6 +148,7 @@ function App() {
                       path === "/admin/funding" ? <FundingPortalPage /> :
                       path === "/admin/transactions" ? <AdminTransactionsPage /> :
                       path === "/admin/settings" ? <AdminSettingsPage /> :
+                      path === "/admin/support" ? <AdminSupportTicketsPage /> :
                       <Placeholder path={path} />
                     }
                   />

@@ -8,18 +8,21 @@ import {
   SettingsIcon,
   SearchIcon,
   ActivityIcon,
-  LandmarkIcon
+  LandmarkIcon,
+  MessagesSquareIcon
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
+import { SystemErrorBoundary } from "@/components/error/SystemErrorBoundary";
 
 const ADMIN_NAVIGATION = [
   { name: "Overview", to: "/admin", icon: ActivityIcon },
   { name: "Users & Accounts", to: "/admin/users", icon: UsersIcon },
   { name: "Treasury Reserve", to: "/admin/treasury", icon: LandmarkIcon },
   { name: "KYC Review", to: "/admin/kyc", icon: ShieldAlertIcon },
+  { name: "Support Tickets", to: "/admin/support", icon: MessagesSquareIcon },
   { name: "Transactions", to: "/admin/transactions", icon: ArrowRightLeftIcon },
   { name: "Funding Portal", to: "/admin/funding", icon: BanknoteIcon },
   { name: "Global Settings", to: "/admin/settings", icon: SettingsIcon },
@@ -118,7 +121,9 @@ export default function AdminLayout() {
 
         {/* Page Content */}
         <div className="flex-1 overflow-y-auto p-8 bg-[#050505]">
-          <Outlet />
+          <SystemErrorBoundary level="page">
+            <Outlet />
+          </SystemErrorBoundary>
         </div>
       </main>
     </div>

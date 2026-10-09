@@ -4,8 +4,12 @@ import './index.css'
 import '@/lib/firebase'
 import App from './App.tsx'
 
+import { SystemErrorBoundary } from '@/components/error/SystemErrorBoundary'
+
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <SystemErrorBoundary level="global">
+      <App />
+    </SystemErrorBoundary>
   </StrictMode>,
 )

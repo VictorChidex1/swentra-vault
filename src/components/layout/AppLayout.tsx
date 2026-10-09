@@ -6,6 +6,8 @@ import { TerminalShell } from '@/components/terminal/TerminalShell'
 import { useIdleTimeout } from '@/hooks/useIdleTimeout'
 import { useAuth } from '@/hooks/useAuth'
 
+import { SystemErrorBoundary } from '@/components/error/SystemErrorBoundary'
+
 export default function AppLayout() {
   const { pathname } = useLocation()
   const navigate = useNavigate()
@@ -26,7 +28,9 @@ export default function AppLayout() {
 
   return (
     <TerminalShell title={titleForPath(pathname)}>
-      <Outlet />
+      <SystemErrorBoundary level="page">
+        <Outlet />
+      </SystemErrorBoundary>
     </TerminalShell>
   )
 }
