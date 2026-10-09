@@ -246,7 +246,10 @@ export default function TransferPage() {
                   <div className="font-medium text-foreground uppercase">
                     {accountName}
                   </div>
-                  <div className="text-sm text-muted-foreground font-mono mt-0.5">
+                  <div className="text-[0.65rem] tracking-widest text-primary/80 font-medium mt-1 mb-0.5 uppercase">
+                    {acc.currency} {acc.type === "current" ? "Current" : "Reserve"}
+                  </div>
+                  <div className="text-sm text-muted-foreground font-mono">
                     {formatAccount(acc.accountNumber)}
                   </div>
                 </div>
