@@ -1,5 +1,5 @@
 import { initializeApp, type FirebaseApp } from 'firebase/app'
-import { connectAuthEmulator, getAuth, type Auth } from 'firebase/auth'
+import { connectAuthEmulator, getAuth, type Auth, setPersistence, browserSessionPersistence } from 'firebase/auth'
 import {
   connectFirestoreEmulator,
   getFirestore,
@@ -54,6 +54,11 @@ function readFirebaseConfig(): FirebaseConfig {
 export const firebaseApp: FirebaseApp = initializeApp(readFirebaseConfig())
 
 export const auth: Auth = getAuth(firebaseApp)
+
+// Enforce session persistence for security (logout on tab close)
+setPersistence(auth, browserSessionPersistence).catch((err) => {
+  console.error("Failed to set Firebase Auth persistence:", err);
+})
 export const db: Firestore = getFirestore(firebaseApp)
 export const storage: FirebaseStorage = getStorage(firebaseApp)
 export const functions: Functions = getFunctions(firebaseApp)

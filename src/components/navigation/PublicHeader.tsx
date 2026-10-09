@@ -138,15 +138,24 @@ export function PublicHeader() {
 
         <div className="hidden items-center gap-3 md:flex relative z-10">
           {user ? (
-            <Button
-              variant="ghost"
-              size="sm"
-              className="hover:bg-white/5"
-              onClick={() => { signOut(); navigate('/'); }}
-            >
-              <LogOutIcon className="size-4" />
-              Sign out
-            </Button>
+            <>
+              <Button
+                asChild
+                size="sm"
+                className="shadow-[0_0_20px_rgba(0,255,102,0.1)] transition-shadow hover:shadow-[0_0_25px_rgba(0,255,102,0.25)]"
+              >
+                <Link to="/app">Access your account</Link>
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hover:bg-white/5"
+                onClick={() => { signOut(); navigate('/'); }}
+              >
+                <LogOutIcon className="size-4" />
+                Sign out
+              </Button>
+            </>
           ) : (
             <>
               <Button
@@ -205,15 +214,26 @@ export function PublicHeader() {
             </div>
             <div className="flex flex-col gap-2 border-t border-border/50 px-5 py-4">
             {user ? (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="bg-transparent hover:bg-white/5"
-                onClick={() => { signOut(); navigate('/'); }}
-              >
-                <LogOutIcon className="size-4" />
-                Sign out
-              </Button>
+              <>
+                <SheetClose asChild>
+                  <Button
+                    asChild
+                    size="sm"
+                    className="shadow-[0_0_20px_rgba(0,255,102,0.1)] transition-shadow hover:shadow-[0_0_25px_rgba(0,255,102,0.25)]"
+                  >
+                    <Link to="/app">Access your account</Link>
+                  </Button>
+                </SheetClose>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="bg-transparent hover:bg-white/5"
+                  onClick={() => { signOut(); navigate('/'); }}
+                >
+                  <LogOutIcon className="size-4" />
+                  Sign out
+                </Button>
+              </>
             ) : (
               <>
                 <SheetClose asChild>

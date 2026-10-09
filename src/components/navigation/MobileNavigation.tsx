@@ -1,29 +1,37 @@
-import { useState } from 'react'
-import { ArrowLeftRight, Clock, Home, LogOutIcon, Menu, Wallet } from 'lucide-react'
-import { NavLink, useNavigate } from 'react-router-dom'
+import { useState } from "react";
+import {
+  ArrowLeftRight,
+  Clock,
+  Home,
+  LogOutIcon,
+  Menu,
+  Wallet,
+  Globe,
+} from "lucide-react";
+import { NavLink, useNavigate, Link } from "react-router-dom";
 
-import { CUSTOMER_NAV } from '@/components/navigation/nav-items'
-import { TerminalStatus } from '@/components/terminal/TerminalStatus'
-import { Button } from '@/components/ui/button'
+import { CUSTOMER_NAV } from "@/components/navigation/nav-items";
+import { TerminalStatus } from "@/components/terminal/TerminalStatus";
+import { Button } from "@/components/ui/button";
 import {
   Sheet,
   SheetContent,
   SheetHeader,
   SheetTitle,
   SheetTrigger,
-} from '@/components/ui/sheet'
-import { useAuth } from '@/hooks/useAuth'
-import { cn } from '@/lib/utils'
+} from "@/components/ui/sheet";
+import { useAuth } from "@/hooks/useAuth";
+import { cn } from "@/lib/utils";
 
 const PRIMARY = [
-  { label: 'Overview', to: '/app', icon: Home, end: true },
-  { label: 'Accounts', to: '/app/accounts', icon: Wallet, end: false },
-  { label: 'Transfer', to: '/app/transfer', icon: ArrowLeftRight, end: false },
-  { label: 'Activity', to: '/app/transactions', icon: Clock, end: false },
-]
+  { label: "Overview", to: "/app", icon: Home, end: true },
+  { label: "Accounts", to: "/app/accounts", icon: Wallet, end: false },
+  { label: "Transfer", to: "/app/transfer", icon: ArrowLeftRight, end: false },
+  { label: "Activity", to: "/app/transactions", icon: Clock, end: false },
+];
 
 interface MobileNavigationProps {
-  className?: string
+  className?: string;
 }
 
 export function MobileNavigation({ className }: MobileNavigationProps) {
@@ -33,13 +41,13 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
 
   async function handleSignOut() {
     await signOut();
-    navigate('/');
+    navigate("/");
   }
 
   return (
     <nav
       className={cn(
-        'fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-surface/95 backdrop-blur',
+        "fixed inset-x-0 bottom-0 z-40 flex items-stretch border-t border-border bg-surface/95 backdrop-blur",
         className,
       )}
       aria-label="Primary"
@@ -51,8 +59,8 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
           end={item.end}
           className={({ isActive }) =>
             cn(
-              'flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.65rem] transition-colors',
-              isActive ? 'text-primary' : 'text-muted-foreground',
+              "flex flex-1 flex-col items-center gap-1 py-2.5 text-[0.65rem] transition-colors",
+              isActive ? "text-primary" : "text-muted-foreground",
             )
           }
         >
@@ -72,7 +80,13 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
         <SheetContent side="left" className="w-72 border-border bg-surface p-0">
           <SheetHeader className="border-b border-border px-5 py-4">
             <SheetTitle className="text-sm tracking-[0.18em] text-foreground">
-              SWENTRA VAULT
+              <Link
+                to="/"
+                onClick={() => setOpen(false)}
+                className="hover:text-primary transition-colors"
+              >
+                SWENTRA VAULT
+              </Link>
             </SheetTitle>
           </SheetHeader>
           <div className="flex flex-col gap-1 px-3 py-4">
@@ -80,14 +94,14 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.to === '/app'}
+                end={item.to === "/app"}
                 onClick={() => setOpen(false)}
                 className={({ isActive }) =>
                   cn(
-                    'flex items-center gap-3 rounded-md px-3 py-2 text-sm',
+                    "flex items-center gap-3 rounded-md px-3 py-2 text-sm",
                     isActive
-                      ? 'bg-accent text-foreground'
-                      : 'text-muted-foreground hover:bg-accent/60 hover:text-foreground',
+                      ? "bg-accent text-foreground"
+                      : "text-muted-foreground hover:bg-accent/60 hover:text-foreground",
                   )
                 }
               >
@@ -100,7 +114,7 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
           </div>
           <div className="border-t border-border px-5 py-4 space-y-2">
             <p className="mb-2 text-[0.65rem] tracking-[0.2em] text-muted-foreground uppercase">
-              {user ? 'Signed in' : 'Secure session'}
+              {user ? "Signed in" : "Secure session"}
             </p>
             {user ? (
               <>
@@ -108,13 +122,25 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
                   {user.email}
                 </p>
                 <TerminalStatus
-                  label={user.emailVerified ? 'Verified' : 'Email not verified'}
-                  tone={user.emailVerified ? 'success' : 'warning'}
+                  label={user.emailVerified ? "Verified" : "Email not verified"}
+                  tone={user.emailVerified ? "success" : "warning"}
                 />
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+                  className="-ml-3 w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setOpen(false);
+                    navigate("/");
+                  }}
+                >
+                  <Globe className="size-4" />
+                  Return to Home
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="-ml-3 w-full justify-start gap-2 text-muted-foreground hover:text-foreground"
                   onClick={handleSignOut}
                 >
                   <LogOutIcon className="size-4" />
@@ -128,5 +154,5 @@ export function MobileNavigation({ className }: MobileNavigationProps) {
         </SheetContent>
       </Sheet>
     </nav>
-  )
+  );
 }
