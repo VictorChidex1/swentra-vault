@@ -24,13 +24,11 @@ export default function ForgotPasswordPage() {
       setSent(true)
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : 'Failed to send reset email'
-      if (message.includes('user-not-found')) {
-        setError('No account found with this email address.')
-      } else if (message.includes('invalid-email')) {
-        setError('Invalid email address.')
-      } else {
-        setError(message.replace(/^Firebase: /, '').replace(/ \(auth\/.*\)$/, ''))
-      }
+      setError(
+        message
+          .replace(/^Firebase: /, '')
+          .replace(/ \((auth|functions)\/.*\)$/, ''),
+      )
     } finally {
       setSubmitting(false)
     }

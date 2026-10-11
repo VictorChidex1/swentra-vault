@@ -11,15 +11,14 @@ import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
   signOut as firebaseSignOut,
-  sendPasswordResetEmail,
   confirmPasswordReset,
-  sendEmailVerification,
   applyActionCode,
   EmailAuthProvider,
   reauthenticateWithCredential,
   updatePassword,
 } from 'firebase/auth'
-import { auth } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { auth, functions } from '@/lib/firebase'
 
 interface AuthContextValue {
   user: User | null
@@ -57,11 +56,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
 
     signUp: async (email, password) => {
-      const cred = await createUserWithEmailAndPassword(auth, email, password)
-      await sendEmailVerification(cred.user, {
-        url: `${window.location.origin}/verify-email`,
-        handleCodeInApp: true,
-      })
+      // The auth onCreate trigger ("sendPremiumVerificationEmail") sends the
+      // branded verification email via Resend — no client-side send required.
+      await createUserWithEmailAndPassword(auth, email, password)
     },
 
     signOut: async () => {
@@ -69,10 +66,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     },
 
     sendPasswordReset: async (email) => {
-      await sendPasswordResetEmail(auth, email, {
-        url: `${window.location.origin}/reset-password`,
-        handleCodeInApp: true,
-      })
+      const requestPasswordResetEmail = httpsCallable(functions, 'requestPasswordResetEmail')
+      await requestPasswordResetEmail({ email })
     },
 
     confirmPasswordReset: async (oobCode, newPassword) => {
@@ -81,10 +76,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     verifyEmail: async () => {
       if (auth.currentUser) {
-        await sendEmailVerification(auth.currentUser, {
-          url: `${window.location.origin}/verify-email`,
-          handleCodeInApp: true,
-        })
+        const resendVerificationEmail = httpsCallable(functions, 'resendVerificationEmail')
+        await resendVerificationEmail()
       }
     },
 

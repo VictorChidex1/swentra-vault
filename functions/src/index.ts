@@ -2,31 +2,40 @@ import * as functions from "firebase-functions/v1";
 import * as admin from "firebase-admin";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue, Timestamp } from "firebase-admin/firestore";
+import { createHash } from "node:crypto";
 import { Resend } from "resend";
 
 admin.initializeApp();
 
 const resend = new Resend(process.env.RESEND_API_KEY || "re_placeholder");
 
-const APP_URL = "https://swentra-vault.vercel.app";
+const APP_URL = process.env.APP_URL || "https://swentravault.com";
+const MAIL_FROM =
+  process.env.MAIL_FROM || "Swentra Vault <noreply@send.swentravault.com>";
+const MAIL_REPLY_TO = process.env.MAIL_REPLY_TO || "support@swentravault.com";
 
-export const sendPremiumVerificationEmail = functions.auth
-  .user()
-  .onCreate(async (user) => {
-    if (!user.email) return;
+// Cooldown window for auth emails. Guards against inbox flooding and lets the
+// reset endpoint answer uniformly for known and unknown addresses.
+const EMAIL_COOLDOWN_MS = 60_000;
 
-    try {
-      const firebaseLink = await getAuth().generateEmailVerificationLink(
-        user.email,
-        {
-          url: `${APP_URL}/app`, // Where the user goes AFTER verifying
-        },
-      );
+interface EmailContent {
+  heading: string;
+  body: string;
+  ctaLabel: string;
+  ctaUrl: string;
+  secureTag?: string;
+  footerNote?: string;
+}
 
-      const urlObj = new URL(firebaseLink);
-      const customVerificationLink = `${APP_URL}/verify-email${urlObj.search}`;
-
-      const htmlTemplate = `
+function buildEmailHtml({
+  heading,
+  body,
+  ctaLabel,
+  ctaUrl,
+  secureTag = "SECURE REQUEST INITIATED",
+  footerNote = "If you did not sign up for Swentra Vault, please ignore this email. Your security is our top priority.",
+}: EmailContent): string {
+  return `
       <!DOCTYPE html>
       <html lang="en">
       <head>
@@ -58,25 +67,25 @@ export const sendPremiumVerificationEmail = functions.auth
               </table>
             </td>
           </tr>
-          
+
           <!-- Main Content -->
           <tr>
             <td style="padding: 50px 40px;">
               <!-- Logo -->
               <img src="${APP_URL}/assets/swentra-vault-logo-256.png" alt="Swentra Vault" width="48" style="display: block; margin-bottom: 32px;" />
-              
-              <h1 style="font-size: 24px; font-weight: 400; color: #ffffff; margin-bottom: 16px; letter-spacing: -0.5px;">Welcome to Swentra Vault.</h1>
-              
+
+              <h1 style="font-size: 24px; font-weight: 400; color: #ffffff; margin-bottom: 16px; letter-spacing: -0.5px;">${heading}</h1>
+
               <p style="font-size: 15px; line-height: 1.6; color: #A1A1AA; margin-bottom: 32px;">
-                You are one step away from unlocking your secure financial hub. To finalize your account setup and protect your assets, please confirm your email address below.
+                ${body}
               </p>
-              
+
               <!-- Button -->
               <table width="100%" border="0" cellpadding="0" cellspacing="0">
                 <tr>
                   <td style="padding-bottom: 32px;">
-                    <a href="${customVerificationLink}" style="display: inline-block; background-color: #00E559; color: #000000; font-size: 14px; font-weight: 600; padding: 16px 32px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px;">
-                      Activate My Vault
+                    <a href="${ctaUrl}" style="display: inline-block; background-color: #00E559; color: #000000; font-size: 14px; font-weight: 600; padding: 16px 32px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px;">
+                      ${ctaLabel}
                     </a>
                   </td>
                 </tr>
@@ -85,7 +94,7 @@ export const sendPremiumVerificationEmail = functions.auth
               <!-- Manual Link -->
               <p style="font-size: 12px; color: #555555; margin-bottom: 8px;">If the button above does not work, securely copy and paste this link:</p>
               <p style="font-size: 12px; color: #00E559; word-break: break-all; line-height: 1.4; margin-bottom: 40px;">
-                ${customVerificationLink}
+                ${ctaUrl}
               </p>
 
               <!-- Divider -->
@@ -94,14 +103,14 @@ export const sendPremiumVerificationEmail = functions.auth
               <!-- Terminal Footer -->
               <table width="100%" border="0" cellpadding="0" cellspacing="0" style="font-family: monospace; font-size: 11px; color: #888888; line-height: 1.5;">
                 <tr>
-                  <td style="color: #00E559;">&gt; SECURE REQUEST INITIATED</td>
+                  <td style="color: #00E559;">&gt; ${secureTag}</td>
                 </tr>
                 <tr>
                   <td style="color: #00E559;">&gt; TIMESTAMP: ${new Date().toISOString()}</td>
                 </tr>
                 <tr>
                   <td style="padding-top: 16px; color: #A1A1AA; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-size: 13px;">
-                    If you did not sign up for Swentra Vault, please ignore this email. Your security is our top priority.
+                    ${footerNote}
                   </td>
                 </tr>
               </table>
@@ -111,13 +120,113 @@ export const sendPremiumVerificationEmail = functions.auth
       </body>
       </html>
     `;
+}
 
-      await resend.emails.send({
-        // Once I buy swentravault.com and verify it in Resend, change this to: 'Swentra Vault <noreply@swentravault.com>'
-        from: "Swentra Vault <onboarding@resend.dev>",
-        to: [user.email],
+function buildEmailText({
+  heading,
+  body,
+  ctaUrl,
+  footerNote = "If you did not sign up for Swentra Vault, please ignore this email. Your security is our top priority.",
+}: EmailContent): string {
+  return [heading, "", body, "", ctaUrl, "", footerNote].join("\n");
+}
+
+async function sendAuthEmail({
+  to,
+  subject,
+  content,
+}: {
+  to: string;
+  subject: string;
+  content: EmailContent;
+}): Promise<void> {
+  const { error } = await resend.emails.send({
+    from: MAIL_FROM,
+    to: [to],
+    replyTo: MAIL_REPLY_TO,
+    subject,
+    html: buildEmailHtml(content),
+    text: buildEmailText(content),
+  });
+  if (error) {
+    // Resend reports failures in the response, not via thrown exceptions.
+    console.error("Resend send error:", error);
+  }
+}
+
+/** SHA-256 hash of a throttle key so no raw email/uid is stored at rest. */
+function throttleDocId(key: string): string {
+  return createHash("sha256").update(key).digest("hex");
+}
+
+/**
+ * Reserve an email slot in the `emailThrottle` collection atomically.
+ * Returns true when the caller may send now; false when still inside the
+ * cooldown window (caller should no-op). The slot write happens inside the
+ * transaction so concurrent calls cannot both pass the window on one key.
+ */
+async function acquireEmailSlot(key: string): Promise<boolean> {
+  const db = getFirestore();
+  const ref = db.collection("emailThrottle").doc(throttleDocId(key));
+
+  let maySend = false;
+  await db.runTransaction(async (transaction) => {
+    const doc = await transaction.get(ref);
+    const now = Date.now();
+
+    if (doc.exists) {
+      const lastSentAt = doc.data()?.lastSentAt;
+      if (lastSentAt && typeof lastSentAt.toMillis === "function") {
+        const elapsed = now - lastSentAt.toMillis();
+        if (elapsed < EMAIL_COOLDOWN_MS) {
+          return; // inside the window — no-op
+        }
+      }
+    }
+
+    transaction.set(
+      ref,
+      {
+        lastSentAt: FieldValue.serverTimestamp(),
+        count: FieldValue.increment(1),
+        updatedAt: FieldValue.serverTimestamp(),
+      },
+      { merge: true },
+    );
+    maySend = true;
+  });
+
+  return maySend;
+}
+
+/** Rewrite a Firebase action link so the user lands on our app domain. */
+function toAppLink(actionLink: string, path: string): string {
+  const urlObj = new URL(actionLink);
+  return `${APP_URL}${path}${urlObj.search}`;
+}
+
+export const sendPremiumVerificationEmail = functions.auth
+  .user()
+  .onCreate(async (user) => {
+    if (!user.email) return;
+
+    try {
+      const firebaseLink = await getAuth().generateEmailVerificationLink(
+        user.email,
+        {
+          url: `${APP_URL}/app`, // Where the user goes AFTER verifying
+        },
+      );
+
+      await sendAuthEmail({
+        to: user.email,
         subject: "Verify your Swentra Vault account",
-        html: htmlTemplate,
+        content: {
+          heading: "Welcome to Swentra Vault.",
+          body: "You are one step away from unlocking your secure financial hub. To finalize your account setup and protect your assets, please confirm your email address below.",
+          ctaLabel: "Activate My Vault",
+          ctaUrl: toAppLink(firebaseLink, "/verify-email"),
+        },
       });
 
       console.log(
@@ -127,6 +236,94 @@ export const sendPremiumVerificationEmail = functions.auth
       console.error("Error sending premium verification email:", error);
     }
   });
+
+// Resend the verification email from the verify-email screen.
+export const resendVerificationEmail = functions.https.onCall(
+  async (_data, context) => {
+    if (!context.auth) {
+      throw new functions.https.HttpsError("unauthenticated", "Must be logged in");
+    }
+
+    const uid = context.auth.uid;
+
+    // Cooldown guard so a session cannot flood one inbox.
+    if (!(await acquireEmailSlot(`verify:${uid}`))) {
+      return { ok: true };
+    }
+
+    try {
+      const userRecord = await getAuth().getUser(uid);
+      if (userRecord.emailVerified || !userRecord.email) {
+        return { ok: true };
+      }
+
+      const firebaseLink = await getAuth().generateEmailVerificationLink(
+        userRecord.email,
+        { url: `${APP_URL}/app` },
+      );
+
+      await sendAuthEmail({
+        to: userRecord.email,
+        subject: "Verify your Swentra Vault account",
+        content: {
+          heading: "Verify your Swentra Vault account.",
+          body: "Your secure financial hub is almost ready. Please confirm your email address below to activate your account.",
+          ctaLabel: "Verify My Email",
+          ctaUrl: toAppLink(firebaseLink, "/verify-email"),
+          secureTag: "VERIFICATION REQUESTED",
+        },
+      });
+    } catch (error) {
+      // Never surface account state through this endpoint.
+      console.error("Error resending verification email:", error);
+    }
+
+    return { ok: true };
+  },
+);
+
+// Password reset link sent via Resend. Unauthenticated by design (the user is
+// locked out), so it returns a generic success for every input to avoid
+// account enumeration, and the cooldown caps how often any address is mailed.
+export const requestPasswordResetEmail = functions.https.onCall(async (data) => {
+  const email =
+    typeof data?.email === "string" ? data.email.trim().toLowerCase() : "";
+  if (!email) {
+    throw new functions.https.HttpsError("invalid-argument", "Email is required");
+  }
+
+  // Reserve a slot BEFORE any lookups so known and unknown addresses are
+  // indistinguishable (identical response and timing for a reused address).
+  if (!(await acquireEmailSlot(`reset:${email}`))) {
+    return { ok: true };
+  }
+
+  try {
+    const firebaseLink = await getAuth().generatePasswordResetLink(email, {
+      url: `${APP_URL}/reset-password`,
+    });
+
+    await sendAuthEmail({
+      to: email,
+      subject: "Reset your Swentra Vault password",
+      content: {
+        heading: "Reset your password.",
+        body: "We received a request to reset the password on your Swentra Vault account. Use the button below to choose a new one. If you did not make this request, you can safely ignore this email.",
+        ctaLabel: "Reset My Password",
+        ctaUrl: toAppLink(firebaseLink, "/reset-password"),
+        secureTag: "PASSWORD RESET INITIATED",
+        footerNote:
+          "If you did not request this password reset, please ignore this email. Your security is our top priority.",
+      },
+    });
+  } catch (error) {
+    // user-not-found, Resend failures, etc. all return the same generic success.
+    console.error("Error sending password reset email:", error);
+  }
+
+  return { ok: true };
+});
+
 
 function generate12DigitNumber(): string {
   let result = '';
