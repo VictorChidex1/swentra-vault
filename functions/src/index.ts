@@ -205,6 +205,111 @@ function toAppLink(actionLink: string, path: string): string {
   return `${APP_URL}${path}${urlObj.search}`;
 }
 
+// EXTERNAL_WIRE lifecycle: wires stay PROCESSING until the scheduled completions
+// run (pubsub, every 3 minutes) flips them to COMPLETED once they are at least
+// this old.
+const WIRE_COMPLETION_MIN_AGE_MS = 2 * 60_000;
+
+function formatMoney(amount: number, currency: string): string {
+  return `${currency} ${amount.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function maskAccountNumber(accountNumber: string | undefined): string {
+  const cleaned = (accountNumber || "").replace(/\s/g, "");
+  if (!cleaned) return "—";
+  return cleaned.length <= 4 ? `****${cleaned}` : `****${cleaned.slice(-4)}`;
+}
+
+const TRANSACTION_TYPE_LABELS: Record<string, string> = {
+  SWENTRA_TRANSFER: "Swentra transfer",
+  INTERNAL_TRANSFER: "Internal transfer",
+  EXTERNAL_WIRE: "External wire",
+  INCOMING_TRANSFER: "Incoming transfer",
+};
+
+const SIMULATION_DISCLAIMER =
+  "Swentra Vault is a banking technology prototype and simulated financial environment. Transactions, balances, KYC verification and settlement shown in this demonstration are simulated and do not represent real banking services or regulated financial activity.";
+
+/**
+ * Send a confirmation email for a committed transaction record. Reads only the
+ * stored (server-authoritative) values, skips when already notified, and stamps
+ * `emailNotifiedAt` after sending so a retry cannot double-send.
+ */
+async function sendTransactionConfirmationEmail({
+  to,
+  uid,
+  transactionId,
+  subject,
+}: {
+  to: string;
+  uid: string;
+  transactionId: string;
+  subject: string;
+}): Promise<void> {
+  const db = getFirestore();
+  const txRef = db.collection(`users/${uid}/transactions`).doc(transactionId);
+  const txDoc = await txRef.get();
+  if (!txDoc.exists) return;
+  const tx = txDoc.data()!;
+
+  if (tx.emailNotifiedAt) return; // already confirmed — idempotency
+
+  const amount = Math.abs(tx.amount ?? 0);
+  const fee = tx.fee ?? 0;
+  const totalDebit = Math.abs(tx.totalDebit ?? amount);
+  const currency: string = tx.currency || "";
+  const statusLabel: string =
+    tx.status === "PROCESSING" ? "Processing" : "Completed";
+  const reference: string = tx.reference || "Funds Transfer";
+
+  const lines = [
+    `Type: ${TRANSACTION_TYPE_LABELS[tx.type] || tx.type || "Transaction"}`,
+    `Amount: ${formatMoney(amount, currency)}`,
+    ...(fee > 0 ? [`Fee: ${formatMoney(fee, currency)}`] : []),
+    `Total debited: ${formatMoney(totalDebit, currency)}`,
+    ...(tx.exchangeRate && tx.exchangeRate !== 1
+      ? [`Exchange rate: ${tx.exchangeRate}`]
+      : []),
+    ...(tx.recipientDetails?.fullName
+      ? [`Recipient: ${tx.recipientDetails.fullName}`]
+      : []),
+    ...(tx.recipientDetails?.bankName
+      ? [`Recipient bank: ${tx.recipientDetails.bankName}`]
+      : []),
+    ...(tx.recipientDetails?.accountNumber
+      ? [
+          `Recipient account: ${maskAccountNumber(
+            tx.recipientDetails.accountNumber,
+          )}`,
+        ]
+      : []),
+    `Reference: ${reference}`,
+    `Status: ${statusLabel}`,
+  ];
+
+  await sendAuthEmail({
+    to,
+    subject,
+    content: {
+      heading: "Transaction confirmed.",
+      body: lines.join("\n"),
+      ctaLabel: "View Transactions",
+      ctaUrl: `${APP_URL}/app/transactions`,
+      secureTag: "TRANSACTION RECORDED",
+      footerNote: SIMULATION_DISCLAIMER,
+    },
+  });
+
+  try {
+    await txRef.update({ emailNotifiedAt: FieldValue.serverTimestamp() });
+  } catch (error) {
+    console.error(`Failed to stamp emailNotifiedAt on ${transactionId}:`, error);
+  }
+}
+
 export const sendPremiumVerificationEmail = functions.auth
   .user()
   .onCreate(async (user) => {
@@ -868,7 +973,9 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
   if (adminQuery.empty) throw new functions.https.HttpsError('internal', 'Treasury uninitialized');
   const adminUid = adminQuery.docs[0].id;
 
-  return await db.runTransaction(async (t) => {
+  let transferType: string = "";
+
+  const result = await db.runTransaction(async (t) => {
     // 0. Verify Quote
     const quoteRef = db.collection('transferQuotes').doc(quoteId);
     const quoteDoc = await t.get(quoteRef);
@@ -884,6 +991,7 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
     }
 
     const { sourceAccountId, type, principalAmount: amount, totalDebit, convertedAmount: destinationAmount, exchangeRate, fee } = quote;
+    transferType = type;
 
     // 1. Get Sender Account
     const sourceRef = db.collection(`users/${uid}/accounts`).doc(sourceAccountId);
@@ -1014,6 +1122,27 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
 
     return { success: true, transactionId: txRef.id };
   });
+
+  // Post-commit confirmation email. Instant transfers are COMPLETED immediately;
+  // EXTERNAL_WIRE stays PROCESSING and is emailed later by
+  // completePendingWireTransfers once it reaches COMPLETED.
+  if (result.success && transferType !== "EXTERNAL_WIRE") {
+    try {
+      const userRecord = await getAuth().getUser(uid);
+      if (userRecord.email) {
+        await sendTransactionConfirmationEmail({
+          to: userRecord.email,
+          uid,
+          transactionId: result.transactionId,
+          subject: `Transfer confirmed — ${reference || "Funds Transfer"}`,
+        });
+      }
+    } catch (error) {
+      console.error("Error sending transfer confirmation email:", error);
+    }
+  }
+
+  return result;
 });
 
 // Admin Mint Funds (Inject Liquidity)
@@ -1224,5 +1353,78 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
     return { success: true };
   });
 });
+
+// Scheduled EXTERNAL_WIRE completion. Runs every 3 minutes (UTC); any wire that
+// has been PROCESSING for at least WIRE_COMPLETION_MIN_AGE_MS is flipped to
+// COMPLETED and the owner is emailed (guarded by emailNotifiedAt). Existing
+// stuck PROCESSING wires from earlier demos are completed too.
+export const completePendingWireTransfers = functions.pubsub
+  .schedule("every 3 minutes")
+  .timeZone("UTC")
+  .onRun(async () => {
+    const db = getFirestore();
+    const cutoffTime = new Date(Date.now() - WIRE_COMPLETION_MIN_AGE_MS);
+
+    const snapshot = await db
+      .collectionGroup("transactions")
+      .where("type", "==", "EXTERNAL_WIRE")
+      .where("status", "==", "PROCESSING")
+      .get();
+
+    let completed = 0;
+    let emailed = 0;
+
+    for (const doc of snapshot.docs) {
+      const tx = doc.data();
+      const txRef = doc.ref;
+      const uid: string | undefined = tx.userId;
+      if (!uid) {
+        console.error(`Wire ${doc.id} has no userId; skipping`);
+        continue;
+      }
+
+      const createdAt = tx.createdAt
+        ? typeof tx.createdAt.toDate === "function"
+          ? tx.createdAt.toDate()
+          : new Date(tx.createdAt)
+        : new Date(0);
+      if (createdAt > cutoffTime) continue; // too fresh — leave it pending
+
+      try {
+        // Re-check inside a transaction so concurrent runs can't double-complete.
+        await db.runTransaction(async (t) => {
+          const fresh = await t.get(txRef);
+          if (!fresh.exists) return;
+          const data = fresh.data();
+          if (!data || data.status !== "PROCESSING") return;
+          t.update(txRef, {
+            status: "COMPLETED",
+            completedAt: FieldValue.serverTimestamp(),
+          });
+        });
+        completed++;
+
+        const userRecord = await getAuth().getUser(uid);
+        if (userRecord.email) {
+          await sendTransactionConfirmationEmail({
+            to: userRecord.email,
+            uid,
+            transactionId: doc.id,
+            subject: `Wire completed — ${tx.reference || "Funds Transfer"}`,
+          });
+          emailed++;
+        } else {
+          // No email address — stamp it so the run doesn't retry this wire.
+          await txRef.update({ emailNotifiedAt: FieldValue.serverTimestamp() });
+        }
+      } catch (error) {
+        console.error(`Error completing wire ${doc.id}:`, error);
+      }
+    }
+
+    console.log(
+      `Wire completion run: completed=${completed}, emailed=${emailed}`,
+    );
+  });
 
 export * from './pin';
