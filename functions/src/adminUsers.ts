@@ -1,13 +1,21 @@
 import * as functions from "firebase-functions/v1";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { ADMIN_BOOTSTRAP_SECRET } from "./config";
+import { recordAudit, recordSecurityEvent } from "./audit";
 
 // Admin Bootstrapper
 export const bootstrapAdmin = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
   
   const { secretKey } = data;
-  if (secretKey !== 'SwentraAdmin2026') {
+  if (secretKey !== ADMIN_BOOTSTRAP_SECRET) {
+    await recordSecurityEvent({
+      action: 'admin.bootstrap_rejected',
+      actorUid: context.auth.uid,
+      reason: 'Invalid bootstrap secret',
+      result: 'denied',
+    });
     throw new functions.https.HttpsError('permission-denied', 'Invalid secret key');
   }
 
@@ -55,6 +63,13 @@ export const bootstrapAdmin = functions.https.onCall(async (data, context) => {
     }, { merge: true });
   }
   await batch.commit();
+
+  await recordAudit({
+    action: 'admin.bootstrap',
+    actorUid: context.auth.uid,
+    result: 'success',
+    description: 'Admin claims granted and treasury accounts provisioned',
+  });
 
   return { success: true, message: 'You are now an admin and treasury accounts have been provisioned. Please sign out and sign back in to refresh your token.' };
 });
@@ -108,6 +123,15 @@ export const adminToggleUserStatus = functions.https.onCall(async (data, context
   }
 
   await getAuth().updateUser(targetUid, { disabled });
+
+  await recordAudit({
+    action: 'admin.toggle_user_status',
+    actorUid: context.auth.uid,
+    targetUid,
+    description: `User account ${disabled ? 'disabled' : 'enabled'}`,
+    result: 'success',
+  });
+
   return { success: true, message: `User account ${disabled ? 'disabled' : 'enabled'}.` };
 });
 
@@ -134,5 +158,47 @@ export const adminToggleAccess = functions.https.onCall(async (data, context) =>
     admin: isAdmin
   });
 
+  await recordAudit({
+    action: 'admin.toggle_admin_access',
+    actorUid: context.auth.uid,
+    targetUid,
+    description: `Admin privileges ${isAdmin ? 'granted' : 'revoked'}`,
+    result: 'success',
+  });
+
   return { success: true, message: `Admin privileges ${isAdmin ? 'granted' : 'revoked'} for ${user.email}.` };
+});
+
+// Admin Reset Transaction PIN (clears a forgotten PIN or a lockout)
+export const adminResetPin = functions.https.onCall(async (data, context) => {
+  if (!context.auth || !context.auth.token.admin) {
+    throw new functions.https.HttpsError('permission-denied', 'Admin only');
+  }
+
+  const { targetUid } = data;
+  if (!targetUid || typeof targetUid !== 'string') {
+    throw new functions.https.HttpsError('invalid-argument', 'Invalid parameters');
+  }
+
+  const db = getFirestore();
+  const userRef = db.collection('users').doc(targetUid);
+  await userRef.set(
+    {
+      pinHash: FieldValue.delete(),
+      failedPinAttempts: 0,
+      pinLockedUntil: FieldValue.delete(),
+      pinUpdatedAt: FieldValue.serverTimestamp(),
+    },
+    { merge: true },
+  );
+
+  await recordAudit({
+    action: 'admin.pin_reset',
+    actorUid: context.auth.uid,
+    targetUid,
+    result: 'success',
+    description: 'Transaction PIN cleared',
+  });
+
+  return { success: true, message: 'Transaction PIN cleared. The user must set a new PIN.' };
 });

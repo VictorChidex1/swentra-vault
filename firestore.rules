@@ -49,6 +49,36 @@ service cloud.firestore {
       allow read: if isAdmin();
     }
 
+    // Server-authoritative data — written only by Cloud Functions (Admin SDK),
+    // never exposed to the client.
+    match /accountNumbers/{accountNumber} {
+      allow read, write: if false;
+    }
+
+    match /transferQuotes/{quoteId} {
+      allow read, write: if false;
+    }
+
+    match /emailThrottle/{hash} {
+      allow read, write: if false;
+    }
+
+    match /system/{document=**} {
+      allow read, write: if false;
+    }
+
+    // Audit & security-event records — admin read only; written only by
+    // Cloud Functions (Admin SDK).
+    match /auditLogs/{logId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
+    match /securityEvents/{eventId} {
+      allow read: if isAdmin();
+      allow write: if false;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

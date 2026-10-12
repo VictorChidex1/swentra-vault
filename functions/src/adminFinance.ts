@@ -1,5 +1,6 @@
 import * as functions from "firebase-functions/v1";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { recordAudit } from "./audit";
 
 // Admin Process Funding (Deposit/Withdraw)
 export const adminProcessFunding = functions.https.onCall(async (data, context) => {
@@ -16,6 +17,8 @@ export const adminProcessFunding = functions.https.onCall(async (data, context) 
   const db = getFirestore();
   const accountRef = db.collection('users').doc(targetUid).collection('accounts').doc(accountId);
   const transactionsRef = db.collection('users').doc(targetUid).collection('transactions');
+
+  let createdTxId: string | null = null;
 
   try {
     await db.runTransaction(async (transaction) => {
@@ -39,6 +42,7 @@ export const adminProcessFunding = functions.https.onCall(async (data, context) 
 
       // Create transaction record
       const newTxRef = transactionsRef.doc();
+      createdTxId = newTxRef.id;
       const txData = {
         accountId,
         type,
@@ -64,6 +68,16 @@ export const adminProcessFunding = functions.https.onCall(async (data, context) 
       transaction.set(newTxRef, txData);
     });
 
+    await recordAudit({
+      action: 'admin.process_funding',
+      actorUid: context.auth.uid,
+      targetUid,
+      accountId,
+      transactionId: createdTxId ?? undefined,
+      description: `${type} of ${amount} processed`,
+      result: 'success',
+    });
+
     return { success: true, message: `Successfully processed ${type} of ${amount}.` };
   } catch (error: any) {
     console.error("Funding transaction failed:", error);
@@ -87,7 +101,7 @@ export const adminMintFunds = functions.https.onCall(async (data, context) => {
   const masterId = `system-master-${currency.toLowerCase()}`;
   const masterRef = db.collection('users').doc(authUid).collection('accounts').doc(masterId);
 
-  return await db.runTransaction(async (t) => {
+  const result = await db.runTransaction(async (t) => {
     const doc = await t.get(masterRef);
     if (!doc.exists) {
       throw new functions.https.HttpsError('not-found', 'Master account not found');
@@ -118,6 +132,16 @@ export const adminMintFunds = functions.https.onCall(async (data, context) => {
 
     return { success: true, newBalance };
   });
+
+  await recordAudit({
+    action: 'admin.mint_funds',
+    actorUid: authUid,
+    accountId: masterId,
+    description: `Minted ${amount} ${currency}`,
+    result: 'success',
+  });
+
+  return result;
 });
 
 // Admin Credit Account
@@ -134,7 +158,9 @@ export const adminCreditAccount = functions.https.onCall(async (data, context) =
 
   const db = getFirestore();
 
-  return await db.runTransaction(async (t) => {
+  let creditedTxId: string | null = null;
+
+  const result = await db.runTransaction(async (t) => {
     const destRef = db.collection('users').doc(targetUid).collection('accounts').doc(targetAccountId);
     const destDoc = await t.get(destRef);
     if (!destDoc.exists) throw new functions.https.HttpsError('not-found', 'Target account not found');
@@ -186,6 +212,7 @@ export const adminCreditAccount = functions.https.onCall(async (data, context) =
 
     // Target Tx
     const targetTxRef = db.collection('users').doc(targetUid).collection('transactions').doc();
+    creditedTxId = targetTxRef.id;
     t.set(targetTxRef, {
       id: targetTxRef.id,
       userId: targetUid,
@@ -201,6 +228,18 @@ export const adminCreditAccount = functions.https.onCall(async (data, context) =
 
     return { success: true };
   });
+
+  await recordAudit({
+    action: 'admin.credit_account',
+    actorUid: authUid,
+    targetUid,
+    accountId: targetAccountId,
+    transactionId: creditedTxId ?? undefined,
+    description: `Credited ${amount}`,
+    result: 'success',
+  });
+
+  return result;
 });
 
 // Admin Reverse Transaction
@@ -217,7 +256,9 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
 
   const db = getFirestore();
 
-  return await db.runTransaction(async (t) => {
+  let reversalTxId: string | null = null;
+
+  const result = await db.runTransaction(async (t) => {
     const txRef = db.collection('users').doc(targetUid).collection('transactions').doc(transactionId);
     const txDoc = await t.get(txRef);
     if (!txDoc.exists) throw new functions.https.HttpsError('not-found', 'Transaction not found');
@@ -263,6 +304,7 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
 
     // Create reversal tx
     const revTxRef = db.collection('users').doc(targetUid).collection('transactions').doc();
+    reversalTxId = revTxRef.id;
     t.set(revTxRef, {
       id: revTxRef.id,
       userId: targetUid,
@@ -278,4 +320,15 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
 
     return { success: true };
   });
+
+  await recordAudit({
+    action: 'admin.reverse_transaction',
+    actorUid: authUid,
+    targetUid,
+    transactionId: reversalTxId ?? undefined,
+    description: `Transaction ${transactionId} reversed and refunded`,
+    result: 'success',
+  });
+
+  return result;
 });

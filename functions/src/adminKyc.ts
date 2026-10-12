@@ -1,5 +1,6 @@
 import * as functions from "firebase-functions/v1";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { recordAudit } from "./audit";
 
 // Admin Review KYC
 export const adminReviewKyc = functions.https.onCall(async (data, context) => {
@@ -26,6 +27,15 @@ export const adminReviewKyc = functions.https.onCall(async (data, context) => {
     reviewedAt: FieldValue.serverTimestamp(),
     reviewedBy: context.auth.uid,
     rejectionReason: rejectionReason || null
+  });
+
+  await recordAudit({
+    action: 'admin.kyc_review',
+    actorUid: context.auth.uid,
+    targetUid,
+    result: status.toLowerCase(),
+    reason: rejectionReason || undefined,
+    description: `KYC set to ${status}`,
   });
 
   return { success: true, message: `User KYC ${status.toLowerCase()}` };

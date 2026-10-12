@@ -15,6 +15,10 @@ import {
   getStorage,
   type FirebaseStorage,
 } from 'firebase/storage'
+import {
+  initializeAppCheck,
+  ReCaptchaEnterpriseProvider,
+} from 'firebase/app-check'
 
 interface FirebaseConfig {
   apiKey: string
@@ -62,6 +66,23 @@ setPersistence(auth, browserSessionPersistence).catch((err) => {
 export const db: Firestore = getFirestore(firebaseApp)
 export const storage: FirebaseStorage = getStorage(firebaseApp)
 export const functions: Functions = getFunctions(firebaseApp)
+
+// App Check (Phase 13 security hardening). The reCAPTCHA site key lives in
+// .env.local (VITE_APPCHECK_SITE_KEY); without it App Check stays off. In dev
+// the Web SDK debug provider activates so emulator/local requests can pass the
+// console's enforcement with a registered debug token.
+const appCheckSiteKey = import.meta.env.VITE_APPCHECK_SITE_KEY as string | undefined
+
+if (import.meta.env.DEV) {
+  ;(self as unknown as { FIREBASE_APPCHECK_DEBUG_TOKEN: boolean }).FIREBASE_APPCHECK_DEBUG_TOKEN = true
+}
+
+if (appCheckSiteKey) {
+  initializeAppCheck(firebaseApp, {
+    provider: new ReCaptchaEnterpriseProvider(appCheckSiteKey),
+    isTokenAutoRefreshEnabled: true,
+  })
+}
 
 let emulatorsConnected = false
 

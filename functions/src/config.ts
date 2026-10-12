@@ -16,3 +16,7 @@ export const EMAIL_COOLDOWN_MS = 60_000;
 // run (pubsub, every 3 minutes) flips them to COMPLETED once they are at least
 // this old.
 export const WIRE_COMPLETION_MIN_AGE_MS = 2 * 60_000;
+
+// One-time admin bootstrap secret. MUST be set via functions/.env (gitignored);
+// never committed to source. Empty means bootstrapAdmin always rejects.
+export const ADMIN_BOOTSTRAP_SECRET = process.env.ADMIN_BOOTSTRAP_SECRET || "";

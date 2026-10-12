@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions/v1";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore } from "firebase-admin/firestore";
-import { provisionForUser } from "./provision";
+import { recordAudit } from "./audit";
 
 // Admin Dashboard Stats
 export const adminGetDashboardStats = functions.https.onCall(async (_data, context) => {
@@ -90,28 +90,12 @@ export const adminUpdateSystemConfig = functions.https.onCall(async (data, conte
     updatedBy: context.auth.uid
   }, { merge: true });
 
+  await recordAudit({
+    action: 'admin.system_config_update',
+    actorUid: context.auth.uid,
+    result: 'success',
+    description: 'System configuration updated',
+  });
+
   return { success: true, message: 'System configuration updated successfully.' };
-});
-
-// 2. Manual HTTP trigger to migrate OLD users
-export const runMigration = functions.https.onRequest(async (_req, res) => {
-  try {
-    const listUsersResult = await getAuth().listUsers();
-    let migratedCount = 0;
-    let skippedCount = 0;
-
-    for (const userRecord of listUsersResult.users) {
-      const provisioned = await provisionForUser(userRecord.uid);
-      if (provisioned) {
-        migratedCount++;
-      } else {
-        skippedCount++;
-      }
-    }
-
-    res.status(200).send(`Migration Complete! Migrated ${migratedCount} users. Skipped ${skippedCount} users (already had accounts).`);
-  } catch (error) {
-    console.error("Migration failed:", error);
-    res.status(500).send("Migration failed. Check Firebase console logs.");
-  }
 });
