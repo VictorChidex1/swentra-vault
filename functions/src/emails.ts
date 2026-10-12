@@ -218,6 +218,407 @@ const TRANSACTION_TYPE_LABELS: Record<string, string> = {
 const SIMULATION_DISCLAIMER =
   "Swentra Vault is a banking technology prototype and simulated financial environment. Transactions, balances, KYC verification and settlement shown in this demonstration are simulated and do not represent real banking services or regulated financial activity.";
 
+interface TransactionEmailData {
+  transactionId: string;
+  type: string;
+  amount: number;
+  fee: number;
+  totalDebit: number;
+  currency: string;
+  status: string;
+  reference: string;
+  exchangeRate?: number;
+  recipientDetails?: {
+    fullName?: string;
+    bankName?: string;
+    accountNumber?: string;
+    routingNumber?: string;
+    swiftCode?: string;
+  };
+  createdAt?: unknown;
+}
+
+function formatTimestamp(rawDate: unknown): string {
+  try {
+    if (
+      rawDate &&
+      typeof (rawDate as { toDate?: () => Date }).toDate === "function"
+    ) {
+      return (rawDate as { toDate: () => Date }).toDate().toUTCString();
+    }
+    if (
+      rawDate &&
+      typeof (rawDate as { toMillis?: () => number }).toMillis === "function"
+    ) {
+      return new Date(
+        (rawDate as { toMillis: () => number }).toMillis(),
+      ).toUTCString();
+    }
+    if (typeof rawDate === "string" || typeof rawDate === "number") {
+      return new Date(rawDate).toUTCString();
+    }
+  } catch {
+    // fallback below
+  }
+  return new Date().toUTCString();
+}
+
+function buildTransactionReceiptHtml({
+  tx,
+  subject,
+  ctaUrl,
+}: {
+  tx: TransactionEmailData;
+  subject: string;
+  ctaUrl: string;
+}): string {
+  const isIncoming = tx.type === "INCOMING_TRANSFER";
+  const statusLabel = tx.status === "PROCESSING" ? "Processing" : "Completed";
+  const isProcessing = tx.status === "PROCESSING";
+  const statusColor = isProcessing ? "#EAB308" : "#00E559";
+  const statusBg = isProcessing
+    ? "rgba(234, 179, 8, 0.1)"
+    : "rgba(0, 229, 89, 0.1)";
+  const statusBorder = isProcessing
+    ? "rgba(234, 179, 8, 0.3)"
+    : "rgba(0, 229, 89, 0.3)";
+
+  const heroAmountPrefix = isIncoming ? "+" : "-";
+  const heroAmountDisplay = `${heroAmountPrefix} ${formatMoney(
+    tx.totalDebit,
+    tx.currency,
+  )}`;
+
+  const recipientFullName = tx.recipientDetails?.fullName;
+  const recipientBank = tx.recipientDetails?.bankName;
+  const maskedAcc = maskAccountNumber(tx.recipientDetails?.accountNumber);
+
+  let recipientHero = "";
+  if (recipientFullName) {
+    recipientHero = recipientFullName;
+    if (recipientBank) {
+      recipientHero += ` &bull; ${recipientBank}`;
+    }
+    if (tx.recipientDetails?.accountNumber) {
+      recipientHero += ` (${maskedAcc})`;
+    }
+  } else if (recipientBank) {
+    recipientHero = `${recipientBank} (${maskedAcc})`;
+  } else if (!isIncoming) {
+    recipientHero = "External Account";
+  }
+
+  const rows: Array<{ label: string; value: string; isMono?: boolean }> = [
+    {
+      label: "Transfer Type",
+      value: TRANSACTION_TYPE_LABELS[tx.type] || tx.type || "Transaction",
+    },
+    {
+      label: "Status",
+      value: statusLabel,
+    },
+    {
+      label: "Reference",
+      value: tx.reference || "Funds Transfer",
+    },
+  ];
+
+  if (tx.exchangeRate && tx.exchangeRate !== 1) {
+    rows.push({
+      label: "Exchange Rate",
+      value: String(tx.exchangeRate),
+      isMono: true,
+    });
+  }
+
+  if (recipientFullName) {
+    rows.push({
+      label: "Beneficiary Name",
+      value: recipientFullName,
+    });
+  }
+
+  if (recipientBank) {
+    rows.push({
+      label: "Beneficiary Bank",
+      value: recipientBank,
+    });
+  }
+
+  if (tx.recipientDetails?.accountNumber) {
+    rows.push({
+      label: "Account Number",
+      value: maskedAcc,
+      isMono: true,
+    });
+  }
+
+  if (tx.recipientDetails?.swiftCode) {
+    rows.push({
+      label: "SWIFT / BIC",
+      value: tx.recipientDetails.swiftCode,
+      isMono: true,
+    });
+  }
+
+  if (tx.recipientDetails?.routingNumber) {
+    rows.push({
+      label: "Routing Number",
+      value: tx.recipientDetails.routingNumber,
+      isMono: true,
+    });
+  }
+
+  rows.push({
+    label: "Transaction ID",
+    value: tx.transactionId,
+    isMono: true,
+  });
+
+  const tableRowsHtml = rows
+    .map(
+      (row) => `
+      <tr>
+        <td style="padding: 12px 0; border-bottom: 1px solid #18181B; font-size: 13px; color: #71717A;" width="42%">
+          ${row.label}
+        </td>
+        <td align="right" style="padding: 12px 0; border-bottom: 1px solid #18181B; font-size: 13px; color: #F4F4F5; font-family: ${
+          row.isMono
+            ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+            : '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
+        }; font-weight: 500;" width="58%">
+          ${row.value}
+        </td>
+      </tr>`,
+    )
+    .join("");
+
+  const formattedTimestamp = formatTimestamp(tx.createdAt);
+
+  return `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>${subject}</title>
+        <style>
+          body, p, h1, h2, h3, h4, h5, h6 { margin: 0; padding: 0; }
+          body { background-color: #000000; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+          table { border-spacing: 0; border-collapse: collapse; width: 100%; }
+          td { padding: 0; }
+          a { text-decoration: none; }
+        </style>
+      </head>
+      <body style="background-color: #000000; padding: 40px 16px; margin: 0;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #0A0A0A; border: 1px solid #222222; border-radius: 8px; overflow: hidden;">
+          <!-- Top Security Bar -->
+          <tr>
+            <td style="background-color: #050505; border-bottom: 1px solid #222222; padding: 14px 32px;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #71717A; letter-spacing: 1.5px; text-transform: uppercase;">
+                    SWENTRA VAULT &bull; CRYPTOGRAPHIC DISPATCH
+                  </td>
+                  <td align="right">
+                    <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: ${statusColor}; letter-spacing: 1px; background-color: ${statusBg}; border: 1px solid ${statusBorder}; padding: 4px 8px; border-radius: 4px; text-transform: uppercase;">
+                      &bull; ${statusLabel.toUpperCase()}
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px 32px;">
+              <!-- Logo -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <img src="${APP_URL}/assets/swentra-vault-logo-256.png" alt="Swentra Vault" width="44" height="44" style="display: block; border: 0;" />
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Heading & Subtitle -->
+              <h1 style="font-size: 24px; font-weight: 500; color: #FFFFFF; margin-bottom: 8px; letter-spacing: -0.5px;">
+                Transaction confirmed.
+              </h1>
+              <p style="font-size: 14px; line-height: 1.5; color: #A1A1AA; margin-bottom: 28px;">
+                Funds have been successfully settled and recorded on the Swentra settlement ledger.
+              </p>
+
+              <!-- HERO DEBIT CARD -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #111113; border: 1px solid #27272A; border-radius: 8px; margin-bottom: 32px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 24px;">
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #71717A; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 8px;">
+                          ${isIncoming ? "TOTAL CREDITED TO VAULT" : "TOTAL DEBITED FROM VAULT"}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 32px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.5px; padding-bottom: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                          ${heroAmountDisplay}
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 12px; color: #71717A; padding-bottom: ${recipientHero ? "14px" : "0"};">
+                          ${
+                            tx.fee > 0
+                              ? `Transfer amount: ${formatMoney(
+                                  tx.amount,
+                                  tx.currency,
+                                )} &bull; Network fee: ${formatMoney(
+                                  tx.fee,
+                                  tx.currency,
+                                )}`
+                              : "Zero network fees incurred &bull; Instant settlement"
+                          }
+                        </td>
+                      </tr>
+                      ${
+                        recipientHero
+                          ? `
+                      <tr>
+                        <td style="border-top: 1px solid #1F1F23; padding-top: 14px;">
+                          <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td width="20" valign="middle" style="color: #00E559; font-size: 14px; line-height: 1;">
+                                &#8594;
+                              </td>
+                              <td style="font-size: 13px; color: #E4E4E7; font-weight: 500;">
+                                ${recipientHero}
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>`
+                          : ""
+                      }
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- STRUCTURED LEDGER TABLE -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 32px;">
+                <tr>
+                  <td colspan="2" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #00E559; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 12px; border-bottom: 1px solid #222222;">
+                    TRANSACTION BREAKDOWN & AUDIT DATA
+                  </td>
+                </tr>
+                ${tableRowsHtml}
+              </table>
+
+              <!-- PRIMARY CTA BUTTON -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <a href="${ctaUrl}" style="display: inline-block; background-color: #00E559; color: #000000; font-size: 13px; font-weight: 700; padding: 14px 28px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px;">
+                      View in Vault
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- MANUAL LINK -->
+              <p style="font-size: 12px; color: #555555; margin-bottom: 6px;">Direct link to your transaction ledger:</p>
+              <p style="font-size: 12px; color: #00E559; word-break: break-all; line-height: 1.4; margin-bottom: 32px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                ${ctaUrl}
+              </p>
+
+              <!-- DIVIDER -->
+              <div style="height: 1px; background-color: #222222; margin-bottom: 24px;"></div>
+
+              <!-- TERMINAL AUDIT FOOTER -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; color: #71717A; line-height: 1.6; margin-bottom: 16px;">
+                <tr>
+                  <td style="color: #00E559;">&gt; CRYPTOGRAPHIC RECEIPT: ${tx.transactionId}</td>
+                </tr>
+                <tr>
+                  <td style="color: #00E559;">&gt; SETTLEMENT TIMESTAMP: ${formattedTimestamp}</td>
+                </tr>
+                <tr>
+                  <td style="color: #555555;">&gt; PROTOCOL: SWENTRA-VAULT-SETTLEMENT-V1</td>
+                </tr>
+              </table>
+
+              <!-- REGULATORY DISCLAIMER -->
+              <p style="font-size: 11px; line-height: 1.5; color: #52525B; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+                ${SIMULATION_DISCLAIMER}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+}
+
+function buildTransactionReceiptText({
+  tx,
+  ctaUrl,
+}: {
+  tx: TransactionEmailData;
+  ctaUrl: string;
+}): string {
+  const isIncoming = tx.type === "INCOMING_TRANSFER";
+  const statusLabel = tx.status === "PROCESSING" ? "Processing" : "Completed";
+  const heroAmountPrefix = isIncoming ? "+" : "-";
+  const formattedTimestamp = formatTimestamp(tx.createdAt);
+
+  const textLines = [
+    "SWENTRA VAULT • CRYPTOGRAPHIC TRANSACTION DISPATCH",
+    `Status: ${statusLabel.toUpperCase()}`,
+    "==================================================",
+    "",
+    `${
+      isIncoming ? "TOTAL CREDITED" : "TOTAL DEBITED"
+    }: ${heroAmountPrefix} ${formatMoney(tx.totalDebit, tx.currency)}`,
+    `Transfer Amount: ${formatMoney(tx.amount, tx.currency)}`,
+    ...(tx.fee > 0 ? [`Network Fee: ${formatMoney(tx.fee, tx.currency)}`] : []),
+    "",
+    "TRANSACTION BREAKDOWN:",
+    `- Type: ${TRANSACTION_TYPE_LABELS[tx.type] || tx.type || "Transaction"}`,
+    `- Status: ${statusLabel}`,
+    `- Reference: ${tx.reference || "Funds Transfer"}`,
+    ...(tx.exchangeRate && tx.exchangeRate !== 1
+      ? [`- Exchange Rate: ${tx.exchangeRate}`]
+      : []),
+    ...(tx.recipientDetails?.fullName
+      ? [`- Beneficiary Name: ${tx.recipientDetails.fullName}`]
+      : []),
+    ...(tx.recipientDetails?.bankName
+      ? [`- Beneficiary Bank: ${tx.recipientDetails.bankName}`]
+      : []),
+    ...(tx.recipientDetails?.accountNumber
+      ? [
+          `- Account Number: ${maskAccountNumber(
+            tx.recipientDetails.accountNumber,
+          )}`,
+        ]
+      : []),
+    ...(tx.recipientDetails?.swiftCode
+      ? [`- SWIFT / BIC: ${tx.recipientDetails.swiftCode}`]
+      : []),
+    `- Transaction ID: ${tx.transactionId}`,
+    "",
+    `View in Vault: ${ctaUrl}`,
+    "",
+    "==================================================",
+    `> CRYPTOGRAPHIC RECEIPT: ${tx.transactionId}`,
+    `> SETTLEMENT TIMESTAMP: ${formattedTimestamp}`,
+    "",
+    SIMULATION_DISCLAIMER,
+  ];
+
+  return textLines.join("\n");
+}
+
 /**
  * Send a confirmation email for a committed transaction record. Reads only the
  * stored (server-authoritative) values, skips when already notified, and stamps
@@ -245,48 +646,38 @@ export async function sendTransactionConfirmationEmail({
   const amount = Math.abs(tx.amount ?? 0);
   const fee = tx.fee ?? 0;
   const totalDebit = Math.abs(tx.totalDebit ?? amount);
-  const currency: string = tx.currency || "";
-  const statusLabel: string =
-    tx.status === "PROCESSING" ? "Processing" : "Completed";
+  const currency: string = tx.currency || "USD";
+  const status: string = tx.status || "COMPLETED";
   const reference: string = tx.reference || "Funds Transfer";
 
-  const lines = [
-    `Type: ${TRANSACTION_TYPE_LABELS[tx.type] || tx.type || "Transaction"}`,
-    `Amount: ${formatMoney(amount, currency)}`,
-    ...(fee > 0 ? [`Fee: ${formatMoney(fee, currency)}`] : []),
-    `Total debited: ${formatMoney(totalDebit, currency)}`,
-    ...(tx.exchangeRate && tx.exchangeRate !== 1
-      ? [`Exchange rate: ${tx.exchangeRate}`]
-      : []),
-    ...(tx.recipientDetails?.fullName
-      ? [`Recipient: ${tx.recipientDetails.fullName}`]
-      : []),
-    ...(tx.recipientDetails?.bankName
-      ? [`Recipient bank: ${tx.recipientDetails.bankName}`]
-      : []),
-    ...(tx.recipientDetails?.accountNumber
-      ? [
-          `Recipient account: ${maskAccountNumber(
-            tx.recipientDetails.accountNumber,
-          )}`,
-        ]
-      : []),
-    `Reference: ${reference}`,
-    `Status: ${statusLabel}`,
-  ];
+  const txData: TransactionEmailData = {
+    transactionId,
+    type: tx.type || "EXTERNAL_WIRE",
+    amount,
+    fee,
+    totalDebit,
+    currency,
+    status,
+    reference,
+    exchangeRate: tx.exchangeRate,
+    recipientDetails: tx.recipientDetails,
+    createdAt: tx.createdAt,
+  };
 
-  await sendAuthEmail({
-    to,
+  const ctaUrl = `${APP_URL}/app/transactions`;
+
+  const { error } = await resend.emails.send({
+    from: MAIL_FROM,
+    to: [to],
+    replyTo: MAIL_REPLY_TO,
     subject,
-    content: {
-      heading: "Transaction confirmed.",
-      body: lines.join("\n"),
-      ctaLabel: "View Transactions",
-      ctaUrl: `${APP_URL}/app/transactions`,
-      secureTag: "TRANSACTION RECORDED",
-      footerNote: SIMULATION_DISCLAIMER,
-    },
+    html: buildTransactionReceiptHtml({ tx: txData, subject, ctaUrl }),
+    text: buildTransactionReceiptText({ tx: txData, ctaUrl }),
   });
+
+  if (error) {
+    console.error("Resend send error for transaction email:", error);
+  }
 
   try {
     await txRef.update({ emailNotifiedAt: FieldValue.serverTimestamp() });
