@@ -379,14 +379,14 @@ function buildTransactionReceiptHtml({
     .map(
       (row) => `
       <tr>
-        <td style="padding: 12px 0; border-bottom: 1px solid #18181B; font-size: 13px; color: #71717A;" width="42%">
+        <td valign="top" style="padding: 12px 0; border-bottom: 1px solid #1F1F23; font-size: 13px; color: #8E8E93; line-height: 1.4;" width="42%">
           ${row.label}
         </td>
-        <td align="right" style="padding: 12px 0; border-bottom: 1px solid #18181B; font-size: 13px; color: #F4F4F5; font-family: ${
+        <td align="right" valign="top" style="padding: 12px 0; border-bottom: 1px solid #1F1F23; font-size: 13px; color: #FFFFFF; font-family: ${
           row.isMono
             ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
             : '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        }; font-weight: 500;" width="58%">
+        }; font-weight: 600; line-height: 1.4; word-break: break-word;" width="58%">
           ${row.value}
         </td>
       </tr>`,
@@ -401,8 +401,14 @@ function buildTransactionReceiptHtml({
       <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
         <title>${subject}</title>
         <style>
+          :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+          }
           body, p, h1, h2, h3, h4, h5, h6 { margin: 0; padding: 0; }
           body { background-color: #000000; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
           table { border-spacing: 0; border-collapse: collapse; width: 100%; }
@@ -414,15 +420,15 @@ function buildTransactionReceiptHtml({
         <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #0A0A0A; border: 1px solid #222222; border-radius: 8px; overflow: hidden;">
           <!-- Top Security Bar -->
           <tr>
-            <td style="background-color: #050505; border-bottom: 1px solid #222222; padding: 14px 32px;">
+            <td style="background-color: #050505; border-bottom: 1px solid #222222; padding: 12px 24px;">
               <table width="100%" border="0" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #71717A; letter-spacing: 1.5px; text-transform: uppercase;">
-                    SWENTRA VAULT &bull; CRYPTOGRAPHIC DISPATCH
+                  <td valign="middle" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #888888; letter-spacing: 1.5px; text-transform: uppercase;">
+                    SWENTRA VAULT &bull; DISPATCH
                   </td>
-                  <td align="right">
-                    <span style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: ${statusColor}; letter-spacing: 1px; background-color: ${statusBg}; border: 1px solid ${statusBorder}; padding: 4px 8px; border-radius: 4px; text-transform: uppercase;">
-                      &bull; ${statusLabel.toUpperCase()}
+                  <td align="right" valign="middle" style="white-space: nowrap; width: 1%;">
+                    <span style="display: inline-block; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; color: ${statusColor}; letter-spacing: 0.5px; background-color: ${statusBg}; border: 1px solid ${statusBorder}; padding: 4px 10px; border-radius: 4px; text-transform: uppercase;">
+                      &#9679;&nbsp;${statusLabel.toUpperCase()}
                     </span>
                   </td>
                 </tr>
@@ -432,7 +438,7 @@ function buildTransactionReceiptHtml({
 
           <!-- Main Content -->
           <tr>
-            <td style="padding: 40px 32px;">
+            <td style="padding: 40px 24px;">
               <!-- Logo -->
               <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
                 <tr>
@@ -451,7 +457,7 @@ function buildTransactionReceiptHtml({
               </p>
 
               <!-- HERO DEBIT CARD -->
-              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #111113; border: 1px solid #27272A; border-radius: 8px; margin-bottom: 32px; overflow: hidden;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #111113; border: 1px solid #27272A; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
                 <tr>
                   <td style="padding: 24px;">
                     <table width="100%" border="0" cellpadding="0" cellspacing="0">
@@ -504,22 +510,28 @@ function buildTransactionReceiptHtml({
                 </tr>
               </table>
 
-              <!-- STRUCTURED LEDGER TABLE -->
-              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 32px;">
+              <!-- STRUCTURED LEDGER CARD -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #111113; border: 1px solid #27272A; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
                 <tr>
-                  <td colspan="2" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #00E559; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 12px; border-bottom: 1px solid #222222;">
-                    TRANSACTION BREAKDOWN & AUDIT DATA
+                  <td style="padding: 20px 24px;">
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td colspan="2" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; color: #00E559; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 14px; border-bottom: 1px solid #27272A;">
+                          TRANSACTION BREAKDOWN &amp; AUDIT DATA
+                        </td>
+                      </tr>
+                      ${tableRowsHtml}
+                    </table>
                   </td>
                 </tr>
-                ${tableRowsHtml}
               </table>
 
               <!-- PRIMARY CTA BUTTON -->
               <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
                 <tr>
                   <td>
-                    <a href="${ctaUrl}" style="display: inline-block; background-color: #00E559; color: #000000; font-size: 13px; font-weight: 700; padding: 14px 28px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px;">
-                      View in Vault
+                    <a href="${ctaUrl}" style="display: inline-block; background-color: #00E559; color: #000000 !important; font-size: 13px; font-weight: 700; padding: 14px 28px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px; text-decoration: none;">
+                      <span style="color: #000000 !important; font-weight: 700;">View in Vault</span>
                     </a>
                   </td>
                 </tr>
@@ -527,23 +539,23 @@ function buildTransactionReceiptHtml({
 
               <!-- MANUAL LINK -->
               <p style="font-size: 12px; color: #555555; margin-bottom: 6px;">Direct link to your transaction ledger:</p>
-              <p style="font-size: 12px; color: #00E559; word-break: break-all; line-height: 1.4; margin-bottom: 32px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+              <p style="font-size: 12px; color: #00E559; word-break: break-all; line-height: 1.4; margin-bottom: 28px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
                 ${ctaUrl}
               </p>
 
               <!-- DIVIDER -->
               <div style="height: 1px; background-color: #222222; margin-bottom: 24px;"></div>
 
-              <!-- TERMINAL AUDIT FOOTER -->
-              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; color: #71717A; line-height: 1.6; margin-bottom: 16px;">
+              <!-- TERMINAL AUDIT BOX -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #070709; border: 1px solid #1F1F23; border-radius: 6px; margin-bottom: 24px;">
                 <tr>
-                  <td style="color: #00E559;">&gt; CRYPTOGRAPHIC RECEIPT: ${tx.transactionId}</td>
-                </tr>
-                <tr>
-                  <td style="color: #00E559;">&gt; SETTLEMENT TIMESTAMP: ${formattedTimestamp}</td>
-                </tr>
-                <tr>
-                  <td style="color: #555555;">&gt; PROTOCOL: SWENTRA-VAULT-SETTLEMENT-V1</td>
+                  <td style="padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 1.6;">
+                    <div style="color: #00E559; font-weight: 600;">&gt; CRYPTOGRAPHIC RECEIPT</div>
+                    <div style="color: #FFFFFF; font-size: 11px; word-break: break-all; margin-bottom: 10px;">${tx.transactionId}</div>
+                    <div style="color: #00E559; font-weight: 600;">&gt; SETTLEMENT TIMESTAMP</div>
+                    <div style="color: #A1A1AA; font-size: 11px; margin-bottom: 10px;">${formattedTimestamp}</div>
+                    <div style="color: #555555; font-size: 10px;">&gt; PROTOCOL: SWENTRA-VAULT-SETTLEMENT-V1</div>
+                  </td>
                 </tr>
               </table>
 
