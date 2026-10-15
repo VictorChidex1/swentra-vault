@@ -43,7 +43,8 @@ interface AdminTransactionRecord {
   status: string
   reference: string
   description?: string
-  timestamp: string | Date
+  timestamp?: string | Date
+  createdAt?: any
   metadata?: any
   reversed?: boolean
   reversalReason?: string
@@ -76,7 +77,7 @@ export default function AdminTransactionsPage() {
     // Get last 500 transactions for the ledger
     const q = query(
       collectionGroup(db, 'transactions'),
-      orderBy('timestamp', 'desc'),
+      orderBy('createdAt', 'desc'),
       limit(500)
     )
     const snapshot = await getDocs(q)
@@ -255,7 +256,7 @@ export default function AdminTransactionsPage() {
                           </div>
                           <div className="text-xs text-muted-foreground font-mono flex items-center gap-1 mt-0.5">
                             <CalendarIcon className="w-3 h-3" />
-                            {formatTxDate(tx.timestamp)}
+                            {formatTxDate(tx.createdAt ?? tx.timestamp)}
                           </div>
                         </div>
                       </div>
@@ -340,7 +341,7 @@ export default function AdminTransactionsPage() {
 
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-muted-foreground">Timestamp</span>
-                  <span className="text-right">{formatTxDate(selectedTx.timestamp)}</span>
+                  <span className="text-right">{formatTxDate(selectedTx.createdAt ?? selectedTx.timestamp)}</span>
                 </div>
 
                 <div className="flex justify-between items-center text-sm">

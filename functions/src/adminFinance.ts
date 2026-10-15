@@ -52,6 +52,7 @@ export const adminProcessFunding = functions.https.onCall(async (data, context) 
         description,
         reference: `ADM-${Date.now().toString(36).toUpperCase()}`,
         timestamp: new Date().toISOString(),
+        createdAt: FieldValue.serverTimestamp(),
         metadata: {
           processedBy: context.auth!.uid,
           adminAction: true
