@@ -7,6 +7,17 @@ import { formatCurrency } from '@/types/accounts'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
+import { toast } from 'sonner'
 import {
   FileTextIcon,
   SearchIcon,
@@ -16,6 +27,8 @@ import {
   Loader2Icon,
   CalendarIcon,
   UserIcon,
+  RotateCcwIcon,
+  ShieldAlertIcon,
   XIcon
 } from 'lucide-react'
 
@@ -32,6 +45,8 @@ interface AdminTransactionRecord {
   description?: string
   timestamp: string | Date
   metadata?: any
+  reversed?: boolean
+  reversalReason?: string
 }
 
 interface AdminUserRecord {
@@ -77,13 +92,48 @@ export default function AdminTransactionsPage() {
       } as AdminTransactionRecord
     })
   }, [])
-  const { data: txData, loading: loadingTx } = useAdminCache('admin-transactions-ledger', txFetcher)
+  const { data: txData, loading: loadingTx, refetch: refetchTx } = useAdminCache('admin-transactions-ledger', txFetcher)
   const transactions = txData || []
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState<string>('ALL')
   const [selectedTx, setSelectedTx] = useState<AdminTransactionRecord | null>(null)
+  const [reversalTarget, setReversalTarget] = useState<AdminTransactionRecord | null>(null)
+  const [reversalReason, setReversalReason] = useState('')
+  const [reversing, setReversing] = useState(false)
+
+  const canReverse = (tx: AdminTransactionRecord) =>
+    tx.amount < 0 && !tx.reversed && tx.status !== 'FAILED'
+
+  async function handleReverse() {
+    if (!reversalTarget) return
+    if (reversalReason.trim().length < 3) {
+      toast.error('Please provide a reversal reason (at least 3 characters).')
+      return
+    }
+    setReversing(true)
+    try {
+      const reverse = httpsCallable<
+        { targetUid: string; transactionId: string; reason: string },
+        { success: boolean }
+      >(functions, 'adminReverseTransaction')
+      await reverse({
+        targetUid: reversalTarget.uid,
+        transactionId: reversalTarget.id,
+        reason: reversalReason.trim(),
+      })
+      toast.success('Transaction reversed successfully.')
+      setReversalTarget(null)
+      setReversalReason('')
+      setSelectedTx(null)
+      refetchTx()
+    } catch (error: any) {
+      toast.error(error?.message || 'Failed to reverse transaction.')
+    } finally {
+      setReversing(false)
+    }
+  }
 
   const filteredTransactions = useMemo(() => {
     return transactions.filter(tx => {
@@ -338,10 +388,122 @@ export default function AdminTransactionsPage() {
                 </div>
               )}
 
+              {/* Administrative Actions */}
+              <div className="space-y-4 bg-destructive/5 p-4 rounded-xl border border-destructive/20">
+                <h3 className="text-xs font-semibold text-destructive uppercase tracking-wider mb-2 flex items-center gap-2">
+                  <ShieldAlertIcon className="w-3 h-3" />
+                  Administrative Actions
+                </h3>
+
+                {selectedTx.reversed ? (
+                  <p className="text-sm text-muted-foreground">
+                    This transaction has been reversed.
+                    {selectedTx.reversalReason ? ` Reason: ${selectedTx.reversalReason}` : ''}
+                  </p>
+                ) : canReverse(selectedTx) ? (
+                  <>
+                    <p className="text-xs text-muted-foreground">
+                      Reversing refunds the sender and claws the funds back from the recipient. This is recorded in the audit log.
+                    </p>
+                    <Button
+                      variant="destructive"
+                      className="w-full"
+                      onClick={() => {
+                        setReversalTarget(selectedTx)
+                        setReversalReason('')
+                      }}
+                    >
+                      <RotateCcwIcon className="w-4 h-4 mr-2" />
+                      Reverse transaction
+                    </Button>
+                  </>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    This transaction is not eligible for reversal.
+                  </p>
+                )}
+              </div>
+
             </div>
           </div>
         </div>
       )}
+
+      {/* Reversal confirmation modal */}
+      <Dialog
+        open={!!reversalTarget}
+        onOpenChange={(open) => {
+          if (!open && !reversing) {
+            setReversalTarget(null)
+            setReversalReason('')
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-destructive">
+              <ShieldAlertIcon className="w-5 h-5" />
+              Reverse transaction
+            </DialogTitle>
+            <DialogDescription>
+              This refunds the sender and reverses the funds at the recipient. It is recorded in the audit log and cannot be undone from here.
+            </DialogDescription>
+          </DialogHeader>
+
+          {reversalTarget && (
+            <div className="space-y-4">
+              <div className="space-y-2 rounded-lg border border-border bg-black/20 p-3 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Reference</span>
+                  <span className="font-mono text-xs">{reversalTarget.reference}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Amount</span>
+                  <span className="font-medium">
+                    {formatCurrency(reversalTarget.amount, reversalTarget.currency as any)}
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">User</span>
+                  <span className="font-medium">{userMap.get(reversalTarget.uid) || 'Unknown User'}</span>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="reversal-reason">Reason (required)</Label>
+                <textarea
+                  id="reversal-reason"
+                  rows={3}
+                  value={reversalReason}
+                  onChange={(e) => setReversalReason(e.target.value)}
+                  placeholder="e.g. Duplicate transfer, beneficiary dispute, fraud report…"
+                  className="w-full rounded-lg border border-input bg-transparent px-2.5 py-1.5 text-sm outline-none transition-colors placeholder:text-muted-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50"
+                />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setReversalTarget(null)
+                setReversalReason('')
+              }}
+              disabled={reversing}
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleReverse}
+              disabled={reversing || reversalReason.trim().length < 3}
+            >
+              {reversing ? 'Reversing…' : 'Confirm reversal'}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
