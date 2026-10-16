@@ -1,9 +1,12 @@
 import { useState } from 'react'
-import { useTransactions } from '@/hooks/useTransactions'
+import { useAuth } from '@/hooks/useAuth'
+import { usePaginatedTransactions, type DateRange } from '@/hooks/usePaginatedTransactions'
 import { Card } from '@/components/ui/card'
 import { FileTextIcon, Loader2Icon, SearchIcon } from 'lucide-react'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
+import { DateRangeFilter } from '@/components/shared/DateRangeFilter'
+import { TransactionPagination } from '@/components/shared/TransactionPagination'
 
 import type { Transaction } from '@/types/transactions'
 import { ReceiptPreviewModal } from '@/components/receipts/ReceiptPreviewModal'
@@ -29,9 +32,17 @@ function formatDate(dateStr: any) {
 }
 
 export default function ReceiptsPage() {
-  const { transactions, loading } = useTransactions()
+  const { user } = useAuth()
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
   const [search, setSearch] = useState('')
+  const [range, setRange] = useState<DateRange>({ from: null, to: null })
+
+  const { docs, loading, hasNext, canPrev, pageIndex, next, prev } = usePaginatedTransactions({
+    scope: 'user',
+    uid: user?.uid,
+    range,
+  })
+  const transactions: Transaction[] = docs.map((d) => ({ id: d.id, ...d.data }) as Transaction)
 
   // Receipts are only for COMPLETED transactions
   const completedTransactions = transactions.filter(tx => tx.status === 'COMPLETED')
@@ -64,6 +75,8 @@ export default function ReceiptsPage() {
           onChange={(e) => setSearch(e.target.value)}
         />
       </div>
+
+      <DateRangeFilter range={range} onChange={setRange} />
 
       <div className="space-y-6">
         {loading ? (
@@ -136,6 +149,14 @@ export default function ReceiptsPage() {
           </Card>
         )}
       </div>
+
+      <TransactionPagination
+        pageIndex={pageIndex}
+        hasNext={hasNext}
+        canPrev={canPrev}
+        onPrev={prev}
+        onNext={next}
+      />
 
       <ReceiptPreviewModal 
         transaction={selectedTx} 

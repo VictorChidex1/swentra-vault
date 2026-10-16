@@ -70,7 +70,7 @@ export function formatRelativeTime(value: any): string {
  * of a reversible type. Shared by the dashboard widget, the picker, and the
  * dedicated Reversals page.
  */
-export function useReversibleTransactions(limitCount = 200) {
+export function useReversibleTransactions(limitCount = 30) {
   const usersFetcher = useMemo(() => async () => {
     const adminListUsers = httpsCallable<void, { users: AdminUserRecord[] }>(functions, 'adminListUsers')
     return (await adminListUsers()).data.users

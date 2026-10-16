@@ -1,21 +1,22 @@
 import { useMemo, useState } from 'react'
 import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore'
-import { db } from '@/lib/firebase'
+import { httpsCallable } from 'firebase/functions'
+import { db, functions } from '@/lib/firebase'
 import { useAdminCache } from '@/hooks/useAdminCache'
-import {
-  useReversibleTransactions,
-  toReverseTarget,
-  type ReversibleTx,
-  type ReverseTarget,
-} from '@/hooks/useReversibleTransactions'
+import { toReverseTarget, type ReversibleTx, type ReverseTarget } from '@/hooks/useReversibleTransactions'
+import { usePaginatedTransactions, type DateRange } from '@/hooks/usePaginatedTransactions'
 import { ReverseTransactionDialog } from '@/components/admin/ReverseTransactionDialog'
 import { ReverseTransactionPicker } from '@/components/admin/ReverseTransactionPicker'
+import { DateRangeFilter } from '@/components/shared/DateRangeFilter'
+import { TransactionPagination } from '@/components/shared/TransactionPagination'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { formatCurrency } from '@/types/accounts'
 import { RotateCcwIcon, SearchIcon, Loader2Icon, ShieldAlertIcon } from 'lucide-react'
+
+const ELIGIBLE_TYPES = ['SWENTRA_TRANSFER', 'EXTERNAL_WIRE']
 
 const TYPE_LABELS: Record<string, string> = {
   SWENTRA_TRANSFER: 'Swentra transfer',
@@ -32,15 +33,61 @@ function formatDate(value: any) {
 }
 
 export default function ReversalsPage() {
-  const { transactions, loading, refetch } = useReversibleTransactions()
   const [term, setTerm] = useState('')
   const [typeFilter, setTypeFilter] = useState('ALL')
   const [target, setTarget] = useState<ReverseTarget | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
+  const [range, setRange] = useState<DateRange>({ from: null, to: null })
+
+  const usersFetcher = useMemo(() => async () => {
+    const adminListUsers = httpsCallable<void, { users: { uid: string; email: string }[] }>(functions, 'adminListUsers')
+    return (await adminListUsers()).data.users
+  }, [])
+  const { data: users } = useAdminCache('admin-users', usersFetcher)
+  const userMap = useMemo(() => {
+    const m = new Map<string, string>()
+    ;(users || []).forEach((u) => m.set(u.uid, u.email))
+    return m
+  }, [users])
+
+  const { docs, loading, hasNext, canPrev, pageIndex, next, prev, refetch } = usePaginatedTransactions({
+    scope: 'all',
+    range,
+  })
+
+  const transactions = useMemo<ReversibleTx[]>(() => {
+    return docs
+      .filter((d) => {
+        const t = d.data
+        if (t.amount >= 0) return false
+        if (t.status === 'FAILED') return false
+        if (t.reversed) return false
+        if (!t.sourceAccountId) return false
+        if (!ELIGIBLE_TYPES.includes(t.type)) return false
+        const src = String(t.sourceAccountId)
+        if (src === 'MINT' || src.startsWith('system-')) return false
+        return true
+      })
+      .map((d) => {
+        const t = d.data
+        return {
+          id: d.id,
+          uid: d.uid || '',
+          email: userMap.get(d.uid || '') || 'Unknown User',
+          amount: t.amount,
+          currency: t.currency,
+          type: t.type,
+          status: t.status,
+          reference: t.reference || 'Transaction',
+          createdAt: t.createdAt ?? t.timestamp,
+          recipientDetails: t.recipientDetails,
+        } as ReversibleTx
+      })
+  }, [docs, userMap])
 
   // Recently reversed — from the audit trail.
   const auditFetcher = useMemo(() => async () => {
-    const q = query(collection(db, 'auditLogs'), orderBy('occurredAt', 'desc'), limit(100))
+    const q = query(collection(db, 'auditLogs'), orderBy('occurredAt', 'desc'), limit(30))
     const snap = await getDocs(q)
     return snap.docs
       .map((d) => ({ id: d.id, ...(d.data() as any) }))
@@ -107,6 +154,8 @@ export default function ReversalsPage() {
           ))}
         </div>
       </div>
+
+      <DateRangeFilter range={range} onChange={setRange} />
 
       <Card className="bg-surface border-border overflow-hidden">
         {loading ? (
@@ -234,6 +283,15 @@ export default function ReversalsPage() {
               </table>
             </div>
           </>
+        )}
+        {!loading && (
+          <TransactionPagination
+            pageIndex={pageIndex}
+            hasNext={hasNext}
+            canPrev={canPrev}
+            onPrev={prev}
+            onNext={next}
+          />
         )}
       </Card>
 

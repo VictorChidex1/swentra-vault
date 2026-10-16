@@ -1,6 +1,9 @@
 import { useState } from 'react'
-import { useTransactions } from '@/hooks/useTransactions'
+import { useAuth } from '@/hooks/useAuth'
+import { usePaginatedTransactions, type DateRange } from '@/hooks/usePaginatedTransactions'
 import { Card } from '@/components/ui/card'
+import { DateRangeFilter } from '@/components/shared/DateRangeFilter'
+import { TransactionPagination } from '@/components/shared/TransactionPagination'
 import { ArrowDownLeftIcon, ArrowUpRightIcon, Loader2Icon, ClockIcon, ChevronRightIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -48,8 +51,16 @@ function getDateGroupKey(dateStr: any) {
 }
 
 export default function TransactionsPage() {
-  const { transactions, loading } = useTransactions()
+  const { user } = useAuth()
   const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
+  const [range, setRange] = useState<DateRange>({ from: null, to: null })
+
+  const { docs, loading, hasNext, canPrev, pageIndex, next, prev } = usePaginatedTransactions({
+    scope: 'user',
+    uid: user?.uid,
+    range,
+  })
+  const transactions: Transaction[] = docs.map((d) => ({ id: d.id, ...d.data }) as Transaction)
 
   const groups: { title: string; items: Transaction[] }[] = []
   
@@ -75,6 +86,8 @@ export default function TransactionsPage() {
           Track and review all incoming and outgoing transfers.
         </p>
       </div>
+
+      <DateRangeFilter range={range} onChange={setRange} />
 
       <div className="space-y-6">
         {loading ? (
@@ -158,6 +171,14 @@ export default function TransactionsPage() {
           ))
         )}
       </div>
+
+      <TransactionPagination
+        pageIndex={pageIndex}
+        hasNext={hasNext}
+        canPrev={canPrev}
+        onPrev={prev}
+        onNext={next}
+      />
 
       <TransactionDrawer 
         transaction={selectedTx} 

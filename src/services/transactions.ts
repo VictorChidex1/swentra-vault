@@ -1,12 +1,14 @@
-import { collection, query, orderBy, getDocs } from 'firebase/firestore'
+import { collection, query, orderBy, getDocs, limit } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import type { Transaction, InitiateTransferParams, TransferQuote, TransactionType } from '@/types/transactions'
 
-export async function getTransactions(userId: string): Promise<Transaction[]> {
+// Bounded read: these widgets only need the most recent transactions.
+export async function getTransactions(userId: string, max = 12): Promise<Transaction[]> {
   const q = query(
     collection(db, `users/${userId}/transactions`),
-    orderBy('createdAt', 'desc')
+    orderBy('createdAt', 'desc'),
+    limit(max)
   )
   
   const snapshot = await getDocs(q)

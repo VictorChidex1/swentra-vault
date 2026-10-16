@@ -1,9 +1,11 @@
 import { useState, useMemo } from 'react'
-import { collectionGroup, query, getDocs, orderBy, limit } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
-import { db, functions } from '@/lib/firebase'
+import { functions } from '@/lib/firebase'
 import { useAdminCache } from '@/hooks/useAdminCache'
 import { formatCurrency } from '@/types/accounts'
+import { usePaginatedTransactions, type DateRange } from '@/hooks/usePaginatedTransactions'
+import { DateRangeFilter } from '@/components/shared/DateRangeFilter'
+import { TransactionPagination } from '@/components/shared/TransactionPagination'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
@@ -64,29 +66,25 @@ export default function AdminTransactionsPage() {
     return map
   }, [users])
 
-  // Fetch Transactions
-  const txFetcher = useMemo(() => async () => {
-    // Get last 500 transactions for the ledger
-    const q = query(
-      collectionGroup(db, 'transactions'),
-      orderBy('createdAt', 'desc'),
-      limit(500)
-    )
-    const snapshot = await getDocs(q)
-    
-    return snapshot.docs.map(doc => {
-      const data = doc.data()
-      // path is users/{uid}/transactions/{txId}
-      const uid = doc.ref.parent.parent?.id || ''
-      return {
-        id: doc.id,
-        uid,
-        ...data
-      } as AdminTransactionRecord
-    })
-  }, [])
-  const { data: txData, loading: loadingTx, refetch: refetchTx } = useAdminCache('admin-transactions-ledger', txFetcher)
-  const transactions = txData || []
+  // Paginated global ledger (12/page) with a server-side date range; total count
+  // is included (count() ≈ 1 read per 1,000 rows).
+  const [range, setRange] = useState<DateRange>({ from: null, to: null })
+  const {
+    docs: txDocs,
+    loading: loadingTx,
+    count,
+    hasNext,
+    canPrev,
+    pageIndex,
+    next,
+    prev,
+    refetch: refetchTx,
+  } = usePaginatedTransactions({ scope: 'all', range, withCount: true })
+
+  const transactions = useMemo<AdminTransactionRecord[]>(
+    () => txDocs.map((d) => ({ id: d.id, uid: d.uid || '', ...d.data }) as AdminTransactionRecord),
+    [txDocs],
+  )
 
   // Filters & Search
   const [searchTerm, setSearchTerm] = useState('')
@@ -176,6 +174,8 @@ export default function AdminTransactionsPage() {
         </div>
       </div>
 
+      <DateRangeFilter range={range} onChange={setRange} />
+
       <Card className="flex-1 min-h-0 bg-surface border-border overflow-hidden flex flex-col">
         {loadingTx || loadingUsers ? (
           <div className="h-full flex items-center justify-center flex-col text-muted-foreground">
@@ -251,6 +251,16 @@ export default function AdminTransactionsPage() {
               </tbody>
             </table>
           </div>
+        )}
+        {!loadingTx && !loadingUsers && (
+          <TransactionPagination
+            pageIndex={pageIndex}
+            hasNext={hasNext}
+            canPrev={canPrev}
+            onPrev={prev}
+            onNext={next}
+            count={count}
+          />
         )}
       </Card>
 
