@@ -118,61 +118,122 @@ export default function ReversalsPage() {
             No reversible transactions found.
           </div>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase bg-surface/50">
-                <tr>
-                  <th className="px-6 py-3 font-medium">Amount</th>
-                  <th className="px-6 py-3 font-medium">User</th>
-                  <th className="px-6 py-3 font-medium hidden md:table-cell">Recipient</th>
-                  <th className="px-6 py-3 font-medium hidden lg:table-cell">Type</th>
-                  <th className="px-6 py-3 font-medium hidden lg:table-cell">Reference</th>
-                  <th className="px-6 py-3 font-medium text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filtered.map((tx: ReversibleTx) => (
-                  <tr
-                    key={tx.id}
-                    onClick={() => setTarget(toReverseTarget(tx))}
-                    className="hover:bg-primary/5 transition-colors cursor-pointer"
-                  >
-                    <td className="px-6 py-4 font-medium text-destructive">
-                      {formatCurrency(tx.amount, tx.currency as any)}
-                    </td>
-                    <td className="px-6 py-4">
-                      {tx.email}
+          <>
+            {/* Mobile Tactical Card List (Zero horizontal scrolling; Reverse button front & center) */}
+            <div className="block md:hidden divide-y divide-border">
+              {filtered.map((tx: ReversibleTx) => (
+                <div
+                  key={tx.id}
+                  onClick={() => setTarget(toReverseTarget(tx))}
+                  className="p-4 flex flex-col gap-2.5 hover:bg-primary/5 transition-colors cursor-pointer"
+                >
+                  {/* Top Row: Amount & Direct Reverse Button */}
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="text-base font-bold text-destructive font-mono tracking-tight">
+                        {formatCurrency(tx.amount, tx.currency as any)}
+                      </span>
                       {tx.status !== 'COMPLETED' && (
-                        <Badge variant="secondary" className="ml-2 text-[10px]">{tx.status}</Badge>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0.5">
+                          {tx.status}
+                        </Badge>
                       )}
-                    </td>
-                    <td className="px-6 py-4 hidden md:table-cell text-muted-foreground">
-                      {tx.recipientDetails?.fullName || '—'}
-                    </td>
-                    <td className="px-6 py-4 hidden lg:table-cell">
-                      <Badge variant="outline" className="font-mono text-[10px]">
-                        {TYPE_LABELS[tx.type] || tx.type}
-                      </Badge>
-                    </td>
-                    <td className="px-6 py-4 hidden lg:table-cell font-mono text-xs">{tx.reference}</td>
-                    <td className="px-6 py-4 text-right">
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          setTarget(toReverseTarget(tx))
-                        }}
-                      >
-                        <RotateCcwIcon className="w-3.5 h-3.5 mr-1" />
-                        Reverse
-                      </Button>
-                    </td>
+                    </div>
+                    <Button
+                      variant="destructive"
+                      size="sm"
+                      className="h-8 px-3 text-xs font-semibold shrink-0 shadow-xs"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setTarget(toReverseTarget(tx))
+                      }}
+                    >
+                      <RotateCcwIcon className="w-3.5 h-3.5 mr-1" />
+                      Reverse
+                    </Button>
+                  </div>
+
+                  {/* Middle Row: User Email & Type Badge */}
+                  <div className="flex items-center justify-between text-xs gap-2">
+                    <span className="font-medium text-foreground truncate">
+                      {tx.email}
+                    </span>
+                    <Badge variant="outline" className="font-mono text-[9px] shrink-0 uppercase tracking-wider">
+                      {TYPE_LABELS[tx.type] || tx.type}
+                    </Badge>
+                  </div>
+
+                  {/* Bottom Row: Counterparty & Reference */}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground gap-2 pt-0.5">
+                    <span className="truncate">
+                      &rarr; {tx.recipientDetails?.fullName || 'External Recipient'}
+                      {tx.recipientDetails?.bankName ? ` &bull; ${tx.recipientDetails.bankName}` : ''}
+                    </span>
+                    <span className="font-mono text-[11px] shrink-0 text-muted-foreground/80">
+                      {tx.reference}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Desktop Full-Density Data Table */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-muted-foreground uppercase bg-surface/50">
+                  <tr>
+                    <th className="px-6 py-3 font-medium">Amount</th>
+                    <th className="px-6 py-3 font-medium">User</th>
+                    <th className="px-6 py-3 font-medium">Recipient</th>
+                    <th className="px-6 py-3 font-medium">Type</th>
+                    <th className="px-6 py-3 font-medium">Reference</th>
+                    <th className="px-6 py-3 font-medium text-right">Action</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filtered.map((tx: ReversibleTx) => (
+                    <tr
+                      key={tx.id}
+                      onClick={() => setTarget(toReverseTarget(tx))}
+                      className="hover:bg-primary/5 transition-colors cursor-pointer"
+                    >
+                      <td className="px-6 py-4 font-medium text-destructive">
+                        {formatCurrency(tx.amount, tx.currency as any)}
+                      </td>
+                      <td className="px-6 py-4">
+                        {tx.email}
+                        {tx.status !== 'COMPLETED' && (
+                          <Badge variant="secondary" className="ml-2 text-[10px]">{tx.status}</Badge>
+                        )}
+                      </td>
+                      <td className="px-6 py-4 text-muted-foreground">
+                        {tx.recipientDetails?.fullName || '—'}
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className="font-mono text-[10px]">
+                          {TYPE_LABELS[tx.type] || tx.type}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 font-mono text-xs">{tx.reference}</td>
+                      <td className="px-6 py-4 text-right">
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            setTarget(toReverseTarget(tx))
+                          }}
+                        >
+                          <RotateCcwIcon className="w-3.5 h-3.5 mr-1" />
+                          Reverse
+                        </Button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
       </Card>
 
