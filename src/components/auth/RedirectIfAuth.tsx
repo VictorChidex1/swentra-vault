@@ -1,4 +1,4 @@
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
 import { Loader2Icon } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 
@@ -8,6 +8,7 @@ interface RedirectIfAuthProps {
 
 export function RedirectIfAuth({ children }: RedirectIfAuthProps) {
   const { user, loading } = useAuth()
+  const location = useLocation()
 
   if (loading) {
     return (
@@ -18,7 +19,8 @@ export function RedirectIfAuth({ children }: RedirectIfAuthProps) {
   }
 
   if (user) {
-    return <Navigate to="/app" replace />
+    const from = (location.state as { from?: { pathname: string } })?.from?.pathname ?? '/app'
+    return <Navigate to={from} replace />
   }
 
   return <>{children}</>

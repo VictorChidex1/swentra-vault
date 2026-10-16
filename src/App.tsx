@@ -1,4 +1,6 @@
+import { lazy, Suspense } from "react";
 import { MotionConfig } from "motion/react";
+import { Loader2Icon } from "lucide-react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 
 import { AuthProvider } from "@/hooks/useAuth";
@@ -6,7 +8,6 @@ import { RequireAuth } from "@/components/auth/RequireAuth";
 import { RedirectIfAuth } from "@/components/auth/RedirectIfAuth";
 import { RequireAdmin } from "@/components/auth/RequireAdmin";
 import AppLayout from "@/components/layout/AppLayout";
-import AdminLayout from "@/components/layout/AdminLayout";
 import PublicLayout from "@/components/layout/PublicLayout";
 import { Toaster } from "@/components/ui/sonner";
 import AboutPage from "@/pages/public/AboutPage";
@@ -29,16 +30,18 @@ import AppSecurityPage from "@/pages/app/SecurityPage";
 import BeneficiariesPage from "@/pages/app/BeneficiariesPage";
 import TransferPage from "@/pages/app/TransferPage";
 import TransactionsPage from "@/pages/app/TransactionsPage";
-import BootstrapAdminPage from "@/pages/admin/BootstrapAdmin";
-import OverviewPage from "@/pages/admin/OverviewPage";
-import FundingPortalPage from "@/pages/admin/FundingPortalPage";
-import AdminTransactionsPage from "@/pages/admin/TransactionsPage";
-import AdminSettingsPage from "@/pages/admin/SettingsPage";
-import KycReviewPage from "@/pages/admin/KycReviewPage";
-import UsersPage from "@/pages/admin/UsersPage";
-import TreasuryPage from "@/pages/admin/TreasuryPage";
-import AdminSupportTicketsPage from "@/pages/admin/SupportTicketsPage";
-import ReversalsPage from "@/pages/admin/ReversalsPage";
+// Admin surface is code-split so its code never bloats the initial bundle.
+const AdminLayout = lazy(() => import("@/components/layout/AdminLayout"));
+const BootstrapAdminPage = lazy(() => import("@/pages/admin/BootstrapAdmin"));
+const OverviewPage = lazy(() => import("@/pages/admin/OverviewPage"));
+const FundingPortalPage = lazy(() => import("@/pages/admin/FundingPortalPage"));
+const AdminTransactionsPage = lazy(() => import("@/pages/admin/TransactionsPage"));
+const AdminSettingsPage = lazy(() => import("@/pages/admin/SettingsPage"));
+const KycReviewPage = lazy(() => import("@/pages/admin/KycReviewPage"));
+const UsersPage = lazy(() => import("@/pages/admin/UsersPage"));
+const TreasuryPage = lazy(() => import("@/pages/admin/TreasuryPage"));
+const AdminSupportTicketsPage = lazy(() => import("@/pages/admin/SupportTicketsPage"));
+const ReversalsPage = lazy(() => import("@/pages/admin/ReversalsPage"));
 import ReceiptsPage from "@/pages/app/ReceiptsPage";
 import SupportPage from "@/pages/app/SupportPage";
 import Placeholder from "@/pages/Placeholder";
@@ -77,6 +80,13 @@ function App() {
         <AuthProvider>
           <Toaster />
 
+          <Suspense
+            fallback={
+              <div className="h-svh flex items-center justify-center bg-background">
+                <Loader2Icon className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            }
+          >
           <Routes>
             <Route element={<PublicLayout />}>
               <Route path="/" element={<HomePage />} />
@@ -163,6 +173,7 @@ function App() {
 
             <Route path="*" element={<Placeholder path="404 — not found" />} />
           </Routes>
+          </Suspense>
         </AuthProvider>
       </BrowserRouter>
     </MotionConfig>

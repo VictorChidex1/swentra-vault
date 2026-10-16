@@ -1,8 +1,42 @@
 import { useState, useEffect, useCallback } from 'react'
 
-// Global memory cache to prevent slow navigation
+// Global in-memory cache to prevent slow navigation between admin pages.
+// Also de-dupes concurrent requests for the same key.
 const cache = new Map<string, { data: any, timestamp: number }>()
+const inflight = new Map<string, Promise<any>>()
 const CACHE_DURATION = 1000 * 60 * 5 // 5 minutes
+
+/**
+ * Run a fetcher through the shared cache: returns the in-flight promise if one
+ * exists for `key`, otherwise starts it and stores the result.
+ */
+export function fetchAdminCache<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  const existing = inflight.get(key)
+  if (existing) return existing as Promise<T>
+
+  const promise = fetcher()
+    .then((result) => {
+      cache.set(key, { data: result, timestamp: Date.now() })
+      return result
+    })
+    .finally(() => {
+      inflight.delete(key)
+    })
+
+  inflight.set(key, promise)
+  return promise
+}
+
+/**
+ * Warm the cache for a key ahead of time (fire-and-forget). Used by AdminLayout
+ * to prefetch common data so pages paint instantly from cache.
+ */
+export function primeAdminCache<T>(key: string, fetcher: () => Promise<T>): Promise<T> {
+  return fetchAdminCache(key, fetcher).catch((error) => {
+    console.error(`[AdminCache] Failed to prime ${key}:`, error)
+    return undefined as unknown as T
+  })
+}
 
 export function useAdminCache<T>(
   key: string,
@@ -16,8 +50,7 @@ export function useAdminCache<T>(
   const executeFetch = useCallback(async (forceLoadingState = false) => {
     if (forceLoadingState) setLoading(true)
     try {
-      const result = await fetcher()
-      cache.set(key, { data: result, timestamp: Date.now() })
+      const result = await fetchAdminCache(key, fetcher)
       setData(result)
     } catch (error) {
       console.error(`[AdminCache] Failed to fetch ${key}:`, error)
@@ -40,9 +73,9 @@ export function useAdminCache<T>(
     }
   }, [key, executeFetch, options.backgroundRefetch])
 
-  return { 
-    data, 
-    loading, 
+  return {
+    data,
+    loading,
     refetch: () => executeFetch(true),
     // A way to manually update the cache when a mutation happens (e.g., approving a user)
     mutate: (newData: T) => {

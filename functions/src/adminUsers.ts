@@ -80,27 +80,39 @@ export const adminListUsers = functions.https.onCall(async (_data, context) => {
     throw new functions.https.HttpsError('permission-denied', 'Admin only');
   }
 
-  const listUsersResult = await getAuth().listUsers(1000);
   const db = getFirestore();
 
-  const users = await Promise.all(listUsersResult.users.map(async (u) => {
-    const kycDoc = await db.collection('users').doc(u.uid).collection('kyc').doc('submission').get();
-    const kycStatus = kycDoc.exists ? kycDoc.data()?.status : 'UNVERIFIED';
+  // Aggregate KYC status + account counts in two collection-group reads instead
+  // of N+1 per-user reads (this callable backs several admin pages).
+  const [listUsersResult, kycSnap, accountsSnap] = await Promise.all([
+    getAuth().listUsers(1000),
+    db.collectionGroup('kyc').get(),
+    db.collectionGroup('accounts').get(),
+  ]);
 
-    // Fetch accounts to get total balance (optional but useful)
-    const accountsSnap = await db.collection('users').doc(u.uid).collection('accounts').get();
-    const accountsCount = accountsSnap.size;
+  const kycStatusByUid = new Map<string, string>();
+  kycSnap.forEach((doc) => {
+    const uid = doc.ref.parent.parent?.id;
+    if (uid && doc.id === 'submission') {
+      kycStatusByUid.set(uid, doc.data()?.status || 'UNVERIFIED');
+    }
+  });
 
-    return {
-      uid: u.uid,
-      email: u.email,
-      creationTime: u.metadata.creationTime,
-      lastSignInTime: u.metadata.lastSignInTime,
-      disabled: u.disabled,
-      admin: !!u.customClaims?.admin,
-      kycStatus,
-      accountsCount
-    };
+  const accountsCountByUid = new Map<string, number>();
+  accountsSnap.forEach((doc) => {
+    const uid = doc.ref.parent.parent?.id;
+    if (uid) accountsCountByUid.set(uid, (accountsCountByUid.get(uid) || 0) + 1);
+  });
+
+  const users = listUsersResult.users.map((u) => ({
+    uid: u.uid,
+    email: u.email,
+    creationTime: u.metadata.creationTime,
+    lastSignInTime: u.metadata.lastSignInTime,
+    disabled: u.disabled,
+    admin: !!u.customClaims?.admin,
+    kycStatus: kycStatusByUid.get(u.uid) || 'UNVERIFIED',
+    accountsCount: accountsCountByUid.get(u.uid) || 0
   }));
 
   return { users };
