@@ -9,7 +9,8 @@ import {
   SearchIcon,
   ActivityIcon,
   LandmarkIcon,
-  MessagesSquareIcon
+  MessagesSquareIcon,
+  RotateCcwIcon
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ const ADMIN_NAVIGATION = [
   { name: "KYC Review", to: "/admin/kyc", icon: ShieldAlertIcon },
   { name: "Support Tickets", to: "/admin/support", icon: MessagesSquareIcon },
   { name: "Transactions", to: "/admin/transactions", icon: ArrowRightLeftIcon },
+  { name: "Reversals", to: "/admin/reversals", icon: RotateCcwIcon },
   { name: "Funding Portal", to: "/admin/funding", icon: BanknoteIcon },
   { name: "Global Settings", to: "/admin/settings", icon: SettingsIcon },
 ];

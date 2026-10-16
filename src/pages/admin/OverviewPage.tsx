@@ -1,10 +1,20 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
 import { useAdminCache } from '@/hooks/useAdminCache'
+import { formatCurrency } from '@/types/accounts'
+import {
+  useReversibleTransactions,
+  toReverseTarget,
+  formatRelativeTime,
+  type ReverseTarget,
+} from '@/hooks/useReversibleTransactions'
+import { ReverseTransactionDialog } from '@/components/admin/ReverseTransactionDialog'
+import { ReverseTransactionPicker } from '@/components/admin/ReverseTransactionPicker'
 import {
   UsersIcon,
   ShieldAlertIcon,
@@ -13,8 +23,12 @@ import {
   ActivityIcon,
   Loader2Icon,
   UserPlusIcon,
-  ChevronRightIcon
+  ChevronRightIcon,
+  SearchIcon,
+  RotateCcwIcon
 } from 'lucide-react'
+
+const WIDGET_LIMIT = 5
 
 interface DashboardStats {
   totalUsers: number
@@ -38,6 +52,14 @@ export default function OverviewPage() {
   }, [])
 
   const { data: stats, loading } = useAdminCache('dashboard-stats', fetcher)
+
+  const {
+    transactions: reversible,
+    loading: reversibleLoading,
+    refetch: refetchReversible,
+  } = useReversibleTransactions()
+  const [reversibleTarget, setReversibleTarget] = useState<ReverseTarget | null>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
 
   if (loading || !stats) {
     return (
@@ -114,6 +136,81 @@ export default function OverviewPage() {
               <ArrowRightLeftIcon className="w-5 h-5" />
             </div>
           </div>
+        </Card>
+      </div>
+
+      {/* REVERSIBLE TRANSACTIONS */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-medium tracking-tight flex items-center gap-2">
+              <RotateCcwIcon className="w-5 h-5 text-primary" />
+              Reversible transactions
+            </h2>
+            <p className="text-sm text-muted-foreground mt-1">
+              Most recent transactions eligible for reversal.
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" onClick={() => setPickerOpen(true)}>
+              <SearchIcon className="w-4 h-4 mr-1" />
+              Search all
+            </Button>
+            <Button variant="ghost" size="sm" asChild>
+              <Link to="/admin/reversals">
+                View all
+                <ChevronRightIcon className="w-4 h-4 ml-1" />
+              </Link>
+            </Button>
+          </div>
+        </div>
+
+        <Card className="bg-surface border-border divide-y divide-border">
+          {reversibleLoading ? (
+            <div className="p-8 flex items-center justify-center text-muted-foreground">
+              <Loader2Icon className="w-5 h-5 animate-spin" />
+            </div>
+          ) : reversible.length === 0 ? (
+            <div className="p-8 text-center text-sm text-muted-foreground">
+              No reversible transactions right now.
+            </div>
+          ) : (
+            reversible.slice(0, WIDGET_LIMIT).map((tx) => (
+              <div
+                key={tx.id}
+                onClick={() => setReversibleTarget(toReverseTarget(tx))}
+                className="p-4 flex items-center justify-between gap-4 cursor-pointer hover:bg-primary/5 transition-colors"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm font-medium">
+                    <span className="text-destructive">
+                      {formatCurrency(tx.amount, tx.currency as any)}
+                    </span>
+                    <span className="text-foreground font-normal"> · {tx.email}</span>
+                    {tx.status !== 'COMPLETED' && (
+                      <Badge variant="secondary" className="ml-2 text-[10px]">{tx.status}</Badge>
+                    )}
+                  </div>
+                  <div className="text-xs text-muted-foreground truncate">
+                    → {tx.recipientDetails?.fullName || 'Recipient'}
+                    {tx.recipientDetails?.bankName ? ` · ${tx.recipientDetails.bankName}` : ''} ·{' '}
+                    <span className="font-mono">{tx.reference}</span> · {formatRelativeTime(tx.createdAt)}
+                  </div>
+                </div>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setReversibleTarget(toReverseTarget(tx))
+                  }}
+                >
+                  <RotateCcwIcon className="w-3.5 h-3.5 mr-1" />
+                  Reverse
+                </Button>
+              </div>
+            ))
+          )}
         </Card>
       </div>
 
@@ -223,6 +320,20 @@ export default function OverviewPage() {
           </Card>
         </div>
       </div>
+
+      <ReverseTransactionPicker
+        open={pickerOpen}
+        onOpenChange={setPickerOpen}
+        onSelect={(tx) => {
+          setPickerOpen(false)
+          setReversibleTarget(toReverseTarget(tx))
+        }}
+      />
+      <ReverseTransactionDialog
+        target={reversibleTarget}
+        onClose={() => setReversibleTarget(null)}
+        onReversed={refetchReversible}
+      />
     </div>
   )
 }
