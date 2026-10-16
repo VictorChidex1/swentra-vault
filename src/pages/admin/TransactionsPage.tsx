@@ -157,7 +157,7 @@ export default function AdminTransactionsPage() {
           />
         </div>
 
-        <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 hide-scrollbar">
+        <div className="flex flex-wrap gap-2 w-full sm:w-auto">
           {['ALL', 'DEPOSIT', 'WITHDRAWAL', 'SWENTRA_TRANSFER', 'EXTERNAL_WIRE'].map(type => (
             <button
               key={type}
@@ -178,79 +178,142 @@ export default function AdminTransactionsPage() {
 
       <Card className="flex-1 min-h-0 bg-surface border-border overflow-hidden flex flex-col">
         {loadingTx || loadingUsers ? (
-          <div className="h-full flex items-center justify-center flex-col text-muted-foreground">
+          <div className="h-full flex items-center justify-center flex-col text-muted-foreground py-16">
             <Loader2Icon className="w-8 h-8 animate-spin text-primary mb-4" />
             <p>Loading ledger data...</p>
           </div>
         ) : filteredTransactions.length === 0 ? (
-          <div className="h-full flex items-center justify-center flex-col text-muted-foreground">
+          <div className="h-full flex items-center justify-center flex-col text-muted-foreground py-16">
             <FileTextIcon className="w-12 h-12 mb-4 opacity-20" />
             <p>No transactions found matching your filters.</p>
           </div>
         ) : (
-          <div className="flex-1 overflow-auto custom-scrollbar">
-            <table className="w-full text-sm text-left">
-              <thead className="text-xs text-muted-foreground uppercase bg-surface/50 sticky top-0 z-10 backdrop-blur-md">
-                <tr>
-                  <th className="px-6 py-4 font-medium border-b border-border">Transaction</th>
-                  <th className="px-6 py-4 font-medium border-b border-border hidden md:table-cell">User</th>
-                  <th className="px-6 py-4 font-medium border-b border-border">Type</th>
-                  <th className="px-6 py-4 font-medium border-b border-border text-right">Amount</th>
-                  <th className="px-6 py-4 font-medium border-b border-border text-right">Status</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                {filteredTransactions.map((tx) => (
-                  <tr 
+          <>
+            {/* Mobile Tactical Card List (Zero horizontal scrolling; Amount & Status prominent) */}
+            <div className="block md:hidden flex-1 overflow-y-auto divide-y divide-border">
+              {filteredTransactions.map((tx) => {
+                const isCredit = tx.type === 'DEPOSIT' || tx.type === 'INCOMING_TRANSFER'
+                return (
+                  <div 
                     key={tx.id} 
                     onClick={() => setSelectedTx(tx)}
-                    className="hover:bg-primary/5 transition-colors cursor-pointer group"
+                    className="p-4 flex flex-col gap-2.5 hover:bg-primary/5 transition-colors cursor-pointer group"
                   >
-                    <td className="px-6 py-4">
-                      <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${getTypeColor(tx.type)}`}>
+                    {/* Top Row: Icon + Description & Amount + Status */}
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 min-w-0 flex-1">
+                        <div className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${getTypeColor(tx.type)}`}>
                           {getTypeIcon(tx.type)}
                         </div>
-                        <div>
-                          <div className="font-medium text-foreground group-hover:text-primary transition-colors">
+                        <div className="min-w-0 flex-1">
+                          <div className="font-medium text-foreground group-hover:text-primary transition-colors text-sm line-clamp-1">
                             {tx.description || tx.reference || 'Transaction'}
                           </div>
                           <div className="text-xs text-muted-foreground font-mono flex items-center gap-1 mt-0.5">
-                            <CalendarIcon className="w-3 h-3" />
-                            {formatTxDate(tx.createdAt ?? tx.timestamp)}
+                            <CalendarIcon className="w-3 h-3 shrink-0" />
+                            <span>{formatTxDate(tx.createdAt ?? tx.timestamp)}</span>
                           </div>
                         </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4 hidden md:table-cell">
-                      <div className="flex items-center gap-2">
-                        <UserIcon className="w-4 h-4 text-muted-foreground" />
-                        <span className="font-medium">{userMap.get(tx.uid) || 'Unknown User'}</span>
+
+                      <div className="text-right shrink-0">
+                        <div className={`text-base font-bold font-mono tracking-tight ${isCredit ? 'text-green-500' : 'text-foreground'}`}>
+                          {isCredit ? '+' : '-'}
+                          {formatCurrency(tx.amount, tx.currency as any)}
+                        </div>
+                        <div className="mt-1">
+                          <Badge 
+                            variant={tx.status === 'COMPLETED' ? 'default' : 'secondary'} 
+                            className={`text-[9px] px-1.5 py-0.5 font-medium ${
+                              tx.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''
+                            }`}
+                          >
+                            {tx.status}
+                          </Badge>
+                        </div>
                       </div>
-                    </td>
-                    <td className="px-6 py-4">
-                      <Badge variant="outline" className={`font-mono text-[10px] ${getTypeColor(tx.type)}`}>
+                    </div>
+
+                    {/* Bottom Row: User Email & Monospace Type Badge */}
+                    <div className="flex items-center justify-between text-xs gap-2 pt-1 border-t border-border/40">
+                      <div className="flex items-center gap-1.5 text-muted-foreground truncate min-w-0">
+                        <UserIcon className="w-3 h-3 shrink-0" />
+                        <span className="truncate">{userMap.get(tx.uid) || 'Unknown User'}</span>
+                      </div>
+                      <Badge variant="outline" className={`font-mono text-[9px] shrink-0 uppercase tracking-wider ${getTypeColor(tx.type)}`}>
                         {tx.type}
                       </Badge>
-                    </td>
-                    <td className="px-6 py-4 text-right font-medium">
-                      <span className={tx.type === 'DEPOSIT' || tx.type === 'INCOMING_TRANSFER' ? 'text-green-500' : 'text-foreground'}>
-                        {tx.type === 'DEPOSIT' || tx.type === 'INCOMING_TRANSFER' ? '+' : '-'}
-                        {formatCurrency(tx.amount, tx.currency as any)}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4 text-right">
-                      <Badge variant={tx.status === 'COMPLETED' ? 'default' : 'secondary'} className={
-                        tx.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''
-                      }>
-                        {tx.status}
-                      </Badge>
-                    </td>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+
+            {/* Desktop High-Density Table */}
+            <div className="hidden md:block flex-1 overflow-auto custom-scrollbar">
+              <table className="w-full text-sm text-left">
+                <thead className="text-xs text-muted-foreground uppercase bg-surface/50 sticky top-0 z-10 backdrop-blur-md">
+                  <tr>
+                    <th className="px-6 py-4 font-medium border-b border-border">Transaction</th>
+                    <th className="px-6 py-4 font-medium border-b border-border hidden md:table-cell">User</th>
+                    <th className="px-6 py-4 font-medium border-b border-border">Type</th>
+                    <th className="px-6 py-4 font-medium border-b border-border text-right">Amount</th>
+                    <th className="px-6 py-4 font-medium border-b border-border text-right">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-border">
+                  {filteredTransactions.map((tx) => (
+                    <tr 
+                      key={tx.id} 
+                      onClick={() => setSelectedTx(tx)}
+                      className="hover:bg-primary/5 transition-colors cursor-pointer group"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${getTypeColor(tx.type)}`}>
+                            {getTypeIcon(tx.type)}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="font-medium text-foreground group-hover:text-primary transition-colors max-w-[280px] truncate" title={tx.description || tx.reference}>
+                              {tx.description || tx.reference || 'Transaction'}
+                            </div>
+                            <div className="text-xs text-muted-foreground font-mono flex items-center gap-1 mt-0.5">
+                              <CalendarIcon className="w-3 h-3 shrink-0" />
+                              {formatTxDate(tx.createdAt ?? tx.timestamp)}
+                            </div>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 hidden md:table-cell">
+                        <div className="flex items-center gap-2">
+                          <UserIcon className="w-4 h-4 text-muted-foreground" />
+                          <span className="font-medium">{userMap.get(tx.uid) || 'Unknown User'}</span>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <Badge variant="outline" className={`font-mono text-[10px] ${getTypeColor(tx.type)}`}>
+                          {tx.type}
+                        </Badge>
+                      </td>
+                      <td className="px-6 py-4 text-right font-medium">
+                        <span className={tx.type === 'DEPOSIT' || tx.type === 'INCOMING_TRANSFER' ? 'text-green-500' : 'text-foreground'}>
+                          {tx.type === 'DEPOSIT' || tx.type === 'INCOMING_TRANSFER' ? '+' : '-'}
+                          {formatCurrency(tx.amount, tx.currency as any)}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <Badge variant={tx.status === 'COMPLETED' ? 'default' : 'secondary'} className={
+                          tx.status === 'COMPLETED' ? 'bg-green-500/10 text-green-500 border-green-500/20' : ''
+                        }>
+                          {tx.status}
+                        </Badge>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         )}
         {!loadingTx && !loadingUsers && (
           <TransactionPagination
