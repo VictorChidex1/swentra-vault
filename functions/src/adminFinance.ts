@@ -60,7 +60,6 @@ export const adminProcessFunding = functions.https.onCall(async (data, context) 
         timestamp: new Date().toISOString(),
         createdAt: FieldValue.serverTimestamp(),
         metadata: {
-          processedBy: context.auth!.uid,
           adminAction: true
         }
       };
@@ -287,6 +286,15 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
     if (tx.amount >= 0) throw new functions.https.HttpsError('failed-precondition', 'Only outgoing transactions can be reversed');
     if (tx.status === 'FAILED') throw new functions.https.HttpsError('failed-precondition', 'Failed transactions cannot be reversed');
 
+    // Recipient's original line (internal transfers cross-reference it). Read
+    // before any writes so the reversal can mark both sides.
+    let counterpartyRef: any = null;
+    let counterpartyDoc: any = null;
+    if (tx.counterpartyUid && tx.counterpartyTxId) {
+      counterpartyRef = db.collection('users').doc(tx.counterpartyUid).collection('transactions').doc(tx.counterpartyTxId);
+      counterpartyDoc = await t.get(counterpartyRef);
+    }
+
     const currency: string = tx.currency;
     const principal = Math.abs(tx.amount ?? 0);
     const fee = tx.fee ?? 0;
@@ -411,17 +419,20 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
         status: 'COMPLETED',
         sessionId: 'REV_' + tx.id,
         reversalOf: tx.id,
+        reversalOfRef: tx.reference,
+        originalAmount: principal,
+        reversalReason,
         createdAt: FieldValue.serverTimestamp()
       });
     }
 
-    // 4. Mark the original as reversed.
-    t.update(txRef, {
-      reversed: true,
-      reversedAt: FieldValue.serverTimestamp(),
-      reversedBy: authUid,
-      reversalReason
-    });
+    // 4. Mark the original as reversed on BOTH sides. No admin identity is
+    // written to customer-visible records — the actor stays in auditLogs only.
+    const reversedAt = FieldValue.serverTimestamp();
+    t.update(txRef, { reversed: true, reversedAt, reversalReason });
+    if (counterpartyRef && counterpartyDoc && counterpartyDoc.exists) {
+      t.update(counterpartyRef, { reversed: true, reversedAt, reversalReason });
+    }
 
     // 5. Sender-side reversal record.
     const revTxRef = db.collection('users').doc(targetUid).collection('transactions').doc();
@@ -437,6 +448,9 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
       status: 'COMPLETED',
       sessionId: 'REV_' + tx.id,
       reversalOf: tx.id,
+      reversalOfRef: tx.reference,
+      originalAmount: principal,
+      reversalReason,
       createdAt: FieldValue.serverTimestamp()
     });
 

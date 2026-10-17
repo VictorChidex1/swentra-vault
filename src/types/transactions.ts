@@ -1,7 +1,7 @@
 import { Timestamp } from 'firebase/firestore'
 import type { BeneficiaryType } from './beneficiary'
 
-export type TransactionType = 'INTERNAL_TRANSFER' | 'SWENTRA_TRANSFER' | 'EXTERNAL_WIRE' | 'INCOMING_TRANSFER'
+export type TransactionType = 'INTERNAL_TRANSFER' | 'SWENTRA_TRANSFER' | 'EXTERNAL_WIRE' | 'INCOMING_TRANSFER' | 'REVERSAL_DEBIT'
 export type TransactionStatus = 'PENDING' | 'PROCESSING' | 'COMPLETED' | 'FAILED'
 
 export interface TransactionRecipientDetails {
@@ -21,12 +21,19 @@ export interface Transaction {
   currency: string
   sourceAccountId?: string
   recipientDetails?: TransactionRecipientDetails
-  sourceDetails?: { senderId: string, senderName?: string }
+  sourceDetails?: { senderId: string, senderName?: string, senderEmail?: string }
   exchangeRate?: number
   sessionId?: string
   status: TransactionStatus
   reference: string
   createdAt: Timestamp | Date
+  reversed?: boolean
+  reversalReason?: string
+  reversedAt?: any
+  counterpartyTxId?: string
+  reversalOf?: string
+  reversalOfRef?: string
+  originalAmount?: number
 }
 
 export interface TransferQuote {

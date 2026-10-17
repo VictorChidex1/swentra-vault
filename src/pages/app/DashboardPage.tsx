@@ -10,7 +10,6 @@ import { KycStatusCard } from '@/components/kyc/KycStatusCard'
 import { useTransactions } from '@/hooks/useTransactions'
 import { ArrowUpRightIcon, ArrowDownLeftIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
-import type { Transaction } from '@/types/transactions'
 import { TransactionDrawer } from '@/components/transactions/TransactionDrawer'
 
 function formatAmount(amount: number, currency: string) {
@@ -34,7 +33,8 @@ export default function DashboardPage() {
   const { record: kycRecord, status: kycStatus } = useKyc()
   const { transactions, loading: txLoading } = useTransactions()
   const recentTransactions = transactions.slice(0, 4)
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null)
+  const selectedTx = transactions.find((t) => t.id === selectedTxId) ?? null
   return (
     <div className="mx-auto max-w-5xl py-6 space-y-8">
       {/* Top Header Section */}
@@ -139,7 +139,7 @@ export default function DashboardPage() {
                   return (
                     <button 
                       key={tx.id} 
-                      onClick={() => setSelectedTx(tx)}
+                      onClick={() => setSelectedTxId(tx.id)}
                       className="w-full text-left p-4 flex items-center justify-between hover:bg-surface/50 transition-colors cursor-pointer"
                     >
                       <div className="flex items-center gap-3">
@@ -151,7 +151,9 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <div className="font-medium text-sm text-foreground">
-                            {isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
+                            {(tx.reference || '').toUpperCase().startsWith('REVERSAL') || tx.type === 'REVERSAL_DEBIT'
+                              ? 'Reversal'
+                              : isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
                           </div>
                           <div className="text-[10px] text-muted-foreground mt-0.5 uppercase tracking-wider">
                             {formatDateShort(tx.createdAt)}
@@ -165,6 +167,9 @@ export default function DashboardPage() {
                         )}>
                           {formatAmount(tx.amount, tx.currency)}
                         </div>
+                        {tx.reversed && (
+                          <div className="text-[10px] uppercase tracking-wider text-destructive">Reversed</div>
+                        )}
                       </div>
                     </button>
                   )
@@ -174,7 +179,7 @@ export default function DashboardPage() {
           </div>
         </div>
       </div>
-      <TransactionDrawer transaction={selectedTx} onClose={() => setSelectedTx(null)} />
+      <TransactionDrawer transaction={selectedTx} onClose={() => setSelectedTxId(null)} />
     </div>
   )
 }

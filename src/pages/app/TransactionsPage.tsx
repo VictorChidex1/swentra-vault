@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/useAuth'
 import { usePaginatedTransactions, type DateRange } from '@/hooks/usePaginatedTransactions'
 import { Card } from '@/components/ui/card'
@@ -52,15 +52,24 @@ function getDateGroupKey(dateStr: any) {
 
 export default function TransactionsPage() {
   const { user } = useAuth()
-  const [selectedTx, setSelectedTx] = useState<Transaction | null>(null)
+  const [selectedTxId, setSelectedTxId] = useState<string | null>(null)
   const [range, setRange] = useState<DateRange>({ from: null, to: null })
 
-  const { docs, loading, hasNext, canPrev, pageIndex, next, prev } = usePaginatedTransactions({
+  const { docs, loading, hasNext, canPrev, pageIndex, next, prev, refetch } = usePaginatedTransactions({
     scope: 'user',
     uid: user?.uid,
     range,
   })
   const transactions: Transaction[] = docs.map((d) => ({ id: d.id, ...d.data }) as Transaction)
+  const selectedTx = transactions.find((t) => t.id === selectedTxId) ?? null
+
+  // Refresh the (one-shot) history when the window regains focus so reversals
+  // performed elsewhere show up when the user looks.
+  useEffect(() => {
+    const onFocus = () => refetch()
+    window.addEventListener('focus', onFocus)
+    return () => window.removeEventListener('focus', onFocus)
+  }, [refetch])
 
   const groups: { title: string; items: Transaction[] }[] = []
   
@@ -117,7 +126,7 @@ export default function TransactionsPage() {
                     return (
                       <div 
                         key={tx.id} 
-                        onClick={() => setSelectedTx(tx)}
+                        onClick={() => setSelectedTxId(tx.id)}
                         className="p-4 sm:p-5 flex items-center justify-between hover:bg-surface/60 cursor-pointer transition-colors group"
                       >
                         <div className="flex items-center gap-4">
@@ -130,7 +139,9 @@ export default function TransactionsPage() {
                           
                           <div>
                             <div className="font-medium text-foreground group-hover:text-primary transition-colors">
-                              {isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
+                              {(tx.reference || '').toUpperCase().startsWith('REVERSAL') || tx.type === 'REVERSAL_DEBIT'
+                                ? 'Reversal'
+                                : isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
                             </div>
                             <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                               <span>{formatDate(tx.createdAt).split(',')[1]?.trim() || formatDate(tx.createdAt)}</span>
@@ -148,7 +159,7 @@ export default function TransactionsPage() {
                             )}>
                               {formatAmount(tx.amount, tx.currency)}
                             </div>
-                            <div className="mt-1">
+                            <div className="mt-1 flex items-center justify-end gap-1">
                               <span className={cn(
                                 "inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-medium tracking-wide uppercase",
                                 tx.status === 'COMPLETED' && "bg-primary/10 text-primary",
@@ -158,6 +169,11 @@ export default function TransactionsPage() {
                               )}>
                                 {tx.status}
                               </span>
+                              {tx.reversed && (
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-medium tracking-wide uppercase bg-destructive/10 text-destructive">
+                                  Reversed
+                                </span>
+                              )}
                             </div>
                           </div>
                           <ChevronRightIcon className="size-4 text-muted-foreground opacity-50 group-hover:opacity-100 group-hover:translate-x-1 transition-all" />
@@ -180,9 +196,9 @@ export default function TransactionsPage() {
         onNext={next}
       />
 
-      <TransactionDrawer 
-        transaction={selectedTx} 
-        onClose={() => setSelectedTx(null)} 
+      <TransactionDrawer
+        transaction={selectedTx}
+        onClose={() => setSelectedTxId(null)}
       />
     </div>
   )

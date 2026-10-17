@@ -184,6 +184,8 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
         sessionId,
         createdAt: FieldValue.serverTimestamp()
       });
+      // Cross-reference so a reversal can mark the recipient's line too.
+      t.update(txRef, { counterpartyUid: destinationUid, counterpartyTxId: recipientTxRef.id });
     }
 
     return { success: true, transactionId: txRef.id };

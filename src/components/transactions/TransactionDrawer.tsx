@@ -101,6 +101,8 @@ export function TransactionDrawer({
         {transaction && (() => {
           const sourceAccount = accounts.find(a => a.id === transaction.sourceAccountId)
           const paymentMethod = sourceAccount ? `${sourceAccount.currency} ${sourceAccount.type === 'current' ? 'Current' : 'Reserve'}` : 'Vault Account'
+          const isReversal = (transaction.reference || '').toUpperCase().startsWith('REVERSAL') || transaction.type === 'REVERSAL_DEBIT'
+          const showReversal = !!transaction.reversed || isReversal
           
           const timelineDates = calculateSettlementTimeline(transaction.createdAt, transaction.id)
           const steps = [
@@ -131,25 +133,56 @@ export function TransactionDrawer({
                   {formatAmount(transaction.amount, transaction.currency)}
                 </h2>
                 <div className="flex justify-center pt-2">
-                  <span
-                    className={cn(
-                      "inline-flex items-center rounded-full px-2.5 py-1 text-[0.7rem] font-medium tracking-wide uppercase",
-                      transaction.status === "COMPLETED" &&
-                        "bg-primary/10 text-primary",
-                      transaction.status === "PROCESSING" &&
-                        "bg-secondary text-secondary-foreground",
-                      transaction.status === "PENDING" &&
-                        "bg-muted text-muted-foreground",
-                      transaction.status === "FAILED" &&
-                        "bg-destructive/10 text-destructive",
-                    )}
-                  >
-                    {transaction.status}
-                  </span>
+                  {showReversal ? (
+                    <span className="inline-flex items-center rounded-full px-2.5 py-1 text-[0.7rem] font-medium tracking-wide uppercase bg-destructive/10 text-destructive">
+                      Reversed
+                    </span>
+                  ) : (
+                    <span
+                      className={cn(
+                        "inline-flex items-center rounded-full px-2.5 py-1 text-[0.7rem] font-medium tracking-wide uppercase",
+                        transaction.status === "COMPLETED" &&
+                          "bg-primary/10 text-primary",
+                        transaction.status === "PROCESSING" &&
+                          "bg-secondary text-secondary-foreground",
+                        transaction.status === "PENDING" &&
+                          "bg-muted text-muted-foreground",
+                        transaction.status === "FAILED" &&
+                          "bg-destructive/10 text-destructive",
+                      )}
+                    >
+                      {transaction.status}
+                    </span>
+                  )}
                 </div>
               </div>
 
-              {/* Stepper Timeline */}
+              {showReversal && (
+                <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-4 space-y-1">
+                  <div className="text-[0.65rem] font-medium tracking-widest uppercase text-destructive">
+                    {isReversal ? 'Reversal' : 'This transfer was reversed'}
+                  </div>
+                  {transaction.reversalReason && (
+                    <div className="text-sm text-foreground">Reason: {transaction.reversalReason}</div>
+                  )}
+                  {isReversal && transaction.reversalOfRef && (
+                    <div className="text-xs text-muted-foreground">
+                      Reversal of <span className="font-mono">{transaction.reversalOfRef}</span>
+                    </div>
+                  )}
+                  {isReversal && transaction.originalAmount != null && (
+                    <div className="text-xs text-muted-foreground">
+                      Original amount: {formatAmount(transaction.originalAmount, transaction.currency)}
+                    </div>
+                  )}
+                  <div className="text-xs text-muted-foreground">
+                    {formatDate(transaction.reversedAt || transaction.createdAt)}
+                  </div>
+                </div>
+              )}
+
+              {/* Stepper Timeline — only for successful transfers, never reversed/reversal records */}
+              {!showReversal && (
               <div className="w-full mt-8 pb-2">
                 <div className="flex justify-between relative px-2">
                   {/* Connecting Lines */}
@@ -178,6 +211,7 @@ export function TransactionDrawer({
                   </p>
                 </div>
               </div>
+              )}
 
               <div className="space-y-6 pt-4">
                 <div className="space-y-4">
@@ -187,18 +221,24 @@ export function TransactionDrawer({
 
                   <div className="flex justify-between items-start text-sm">
                     <span className="text-muted-foreground">
-                      {transaction.amount < 0 ? "Sent to" : "Received from"}
+                      {isReversal ? "Reversal" : transaction.amount < 0 ? "Sent to" : "Received from"}
                     </span>
                     <span className="font-medium text-right max-w-[200px]">
-                      {transaction.amount < 0
-                        ? transaction.recipientDetails?.fullName
-                        : transaction.sourceDetails?.senderName}
-                      <br />
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {transaction.amount < 0
-                          ? transaction.recipientDetails?.accountNumber
-                          : transaction.sourceAccountId}
-                      </span>
+                      {isReversal
+                        ? "—"
+                        : transaction.amount < 0
+                          ? transaction.recipientDetails?.fullName
+                          : transaction.sourceDetails?.senderName}
+                      {!isReversal && (
+                        <>
+                          <br />
+                          <span className="font-mono text-xs text-muted-foreground">
+                            {transaction.amount < 0
+                              ? transaction.recipientDetails?.accountNumber
+                              : transaction.sourceAccountId}
+                          </span>
+                        </>
+                      )}
                     </span>
                   </div>
 
