@@ -23,6 +23,18 @@ export interface GetQuoteRequest {
   destinationCurrency: string
   amount: number
   type: TransactionType
+  recipientAccountNumber?: string
+}
+
+export async function resolveAccount(
+  accountNumber: string,
+): Promise<{ found: boolean; currency?: string; holderName?: string | null }> {
+  const fn = httpsCallable<
+    { accountNumber: string },
+    { found: boolean; currency?: string; holderName?: string | null }
+  >(functions, 'resolveAccount')
+  const res = await fn({ accountNumber })
+  return res.data
 }
 
 export async function fetchTransferQuote(request: GetQuoteRequest): Promise<TransferQuote> {

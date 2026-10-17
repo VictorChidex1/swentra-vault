@@ -5,6 +5,7 @@ import { titleForPath } from '@/components/navigation/nav-items'
 import { TerminalShell } from '@/components/terminal/TerminalShell'
 import { useIdleTimeout } from '@/hooks/useIdleTimeout'
 import { useAuth } from '@/hooks/useAuth'
+import { IncomingTransferNotifier } from '@/components/notifications/IncomingTransferNotifier'
 
 import { SystemErrorBoundary } from '@/components/error/SystemErrorBoundary'
 
@@ -28,6 +29,7 @@ export default function AppLayout() {
 
   return (
     <TerminalShell title={titleForPath(pathname)}>
+      <IncomingTransferNotifier />
       <SystemErrorBoundary level="page">
         <Outlet />
       </SystemErrorBoundary>

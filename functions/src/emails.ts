@@ -697,3 +697,53 @@ export async function sendTransactionConfirmationEmail({
     console.error(`Failed to stamp emailNotifiedAt on ${transactionId}:`, error);
   }
 }
+
+/**
+ * Notify the recipient of an incoming internal transfer. Reads the recipient's
+ * INCOMING_TRANSFER record (server-authoritative), sends via Resend, and stamps
+ * `emailNotifiedAt` so a retry cannot double-send.
+ */
+export async function sendIncomingTransferEmail({
+  to,
+  uid,
+  transactionId,
+}: {
+  to: string;
+  uid: string;
+  transactionId: string;
+}): Promise<void> {
+  const db = getFirestore();
+  const txRef = db.collection(`users/${uid}/transactions`).doc(transactionId);
+  const txDoc = await txRef.get();
+  if (!txDoc.exists) return;
+  const tx = txDoc.data()!;
+  if (tx.emailNotifiedAt) return;
+
+  const amount = Math.abs(tx.amount ?? 0);
+  const currency: string = tx.currency || "";
+  const reference: string = tx.reference || "Incoming Transfer";
+  const statusLabel = tx.status === "PROCESSING" ? "Processing" : "Completed";
+
+  await sendAuthEmail({
+    to,
+    subject: `You received ${formatMoney(amount, currency)}`,
+    content: {
+      heading: "You received a transfer.",
+      body: [
+        `Amount received: ${formatMoney(amount, currency)}`,
+        `Reference: ${reference}`,
+        `Status: ${statusLabel}`,
+      ].join("\n"),
+      ctaLabel: "View Transactions",
+      ctaUrl: `${APP_URL}/app/transactions`,
+      secureTag: "FUNDS RECEIVED",
+      footerNote: SIMULATION_DISCLAIMER,
+    },
+  });
+
+  try {
+    await txRef.update({ emailNotifiedAt: FieldValue.serverTimestamp() });
+  } catch (error) {
+    console.error(`Failed to stamp incoming email on ${transactionId}:`, error);
+  }
+}

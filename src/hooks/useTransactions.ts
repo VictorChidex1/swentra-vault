@@ -1,13 +1,19 @@
-import { useState, useEffect } from 'react'
-import { getTransactions } from '@/services/transactions'
+import { useState, useEffect, useRef } from 'react'
+import { collection, onSnapshot, query, orderBy, limit } from 'firebase/firestore'
+import { db } from '@/lib/firebase'
 import { useAuth } from './useAuth'
 import type { Transaction } from '@/types/transactions'
+
+// Bounded real-time feed of the user's most recent transactions. Billing is per
+// document delivered (initial window + 1 per change), so we keep the window small.
+const RECENT_LIMIT = 12
 
 export function useTransactions() {
   const { user } = useAuth()
   const [transactions, setTransactions] = useState<Transaction[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<Error | null>(null)
+  const seedRef = useRef<Set<string>>(new Set())
 
   useEffect(() => {
     if (!user) {
@@ -16,29 +22,32 @@ export function useTransactions() {
       return
     }
 
-    async function load() {
-      try {
-        setLoading(true)
-        const data = await getTransactions(user!.uid)
-        setTransactions(data)
-      } catch (err: any) {
+    setLoading(true)
+    seedRef.current = new Set()
+
+    const q = query(
+      collection(db, `users/${user.uid}/transactions`),
+      orderBy('createdAt', 'desc'),
+      limit(RECENT_LIMIT),
+    )
+
+    const unsubscribe = onSnapshot(
+      q,
+      (snapshot) => {
+        setTransactions(
+          snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() })) as Transaction[],
+        )
+        setLoading(false)
+      },
+      (err) => {
         console.error('Failed to load transactions:', err)
         setError(err)
-      } finally {
         setLoading(false)
-      }
-    }
+      },
+    )
 
-    load()
+    return () => unsubscribe()
   }, [user])
 
-  return { transactions, loading, error, refresh: () => {
-    if (user) {
-      setLoading(true)
-      getTransactions(user.uid)
-        .then(setTransactions)
-        .catch(setError)
-        .finally(() => setLoading(false))
-    }
-  }}
+  return { transactions, loading, error }
 }

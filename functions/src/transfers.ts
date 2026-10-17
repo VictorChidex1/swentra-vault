@@ -1,7 +1,7 @@
 import * as functions from "firebase-functions/v1";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
-import { sendTransactionConfirmationEmail } from "./emails";
+import { sendTransactionConfirmationEmail, sendIncomingTransferEmail } from "./emails";
 
 export const executeTransfer = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
@@ -17,6 +17,8 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
   const adminUid = adminQuery.docs[0].id;
 
   let transferType: string = "";
+  let destUidForNotify: string | null = null;
+  let recipientTxId: string | null = null;
 
   const result = await db.runTransaction(async (t) => {
     // 0. Verify Quote
@@ -61,15 +63,27 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
       const registryDoc = await t.get(registryRef);
       
       if (!registryDoc.exists) {
-        throw new functions.https.HttpsError('not-found', 'Recipient account not found on Swentra Vault');
+        throw new functions.https.HttpsError('failed-precondition', "No Swentra Vault account with that number — use 'New recipient'.");
       }
 
       destinationUid = registryDoc.data()!.assignedTo;
       destinationAccountId = registryDoc.data()!.accountId;
+      destUidForNotify = destinationUid;
 
       destRef = db.collection(`users/${destinationUid}/accounts`).doc(destinationAccountId!);
       destDoc = await t.get(destRef);
       if (!destDoc.exists) throw new functions.https.HttpsError('internal', 'Destination account missing');
+    } else if (type === 'EXTERNAL_WIRE') {
+      // Guard: a wire must never target a Swentra account — that would bypass
+      // crediting the recipient and route the funds to the treasury instead.
+      const accountNumberToFind = String(recipientDetails?.accountNumber || '').replace(/\s/g, '');
+      if (accountNumberToFind) {
+        const registryRef = db.collection('accountNumbers').doc(accountNumberToFind);
+        const registryDoc = await t.get(registryRef);
+        if (registryDoc.exists) {
+          throw new functions.https.HttpsError('failed-precondition', "That's a Swentra Vault account — use 'Swentra transfer' so the recipient is credited instantly.");
+        }
+      }
     }
 
     // Ledger System Reads
@@ -149,6 +163,7 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
     // Create Transaction Record for Recipient (if internal)
     if ((type === 'SWENTRA_TRANSFER' || type === 'INTERNAL_TRANSFER') && destinationUid) {
       const recipientTxRef = db.collection(`users/${destinationUid}/transactions`).doc();
+      recipientTxId = recipientTxRef.id;
       t.set(recipientTxRef, {
         id: recipientTxRef.id,
         userId: destinationUid,
@@ -183,7 +198,59 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
     } catch (error) {
       console.error("Error sending transfer confirmation email:", error);
     }
+
+    // Notify the recipient of the incoming transfer.
+    if (destUidForNotify && recipientTxId) {
+      try {
+        const recipient = await getAuth().getUser(destUidForNotify);
+        if (recipient.email) {
+          await sendIncomingTransferEmail({
+            to: recipient.email,
+            uid: destUidForNotify,
+            transactionId: recipientTxId,
+          });
+        }
+      } catch (error) {
+        console.error("Error sending incoming transfer email:", error);
+      }
+    }
   }
 
   return result;
+});
+
+// Resolve a Swentra Vault account number to its holder + currency. Used by the
+// "Swentra transfer" option for payee confirmation and the "New recipient" hint.
+export const resolveAccount = functions.https.onCall(async (data, context) => {
+  if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
+
+  const accountNumber = String(data?.accountNumber || '').replace(/\s/g, '');
+  if (!accountNumber) {
+    throw new functions.https.HttpsError('invalid-argument', 'Account number is required');
+  }
+
+  const db = getFirestore();
+  const reg = await db.collection('accountNumbers').doc(accountNumber).get();
+  if (!reg.exists) return { found: false };
+
+  const assignedTo = reg.data()!.assignedTo as string;
+  const currency = reg.data()!.currency as string;
+
+  let holderName = '';
+  try {
+    const authUser = await getAuth().getUser(assignedTo);
+    holderName = authUser.displayName || '';
+  } catch {
+    /* ignore */
+  }
+  if (!holderName) {
+    try {
+      const kyc = await db.collection('users').doc(assignedTo).collection('kyc').doc('submission').get();
+      holderName = (kyc.exists && (kyc.data()?.fullName as string)) || '';
+    } catch {
+      /* ignore */
+    }
+  }
+
+  return { found: true, currency, holderName: holderName || null };
 });

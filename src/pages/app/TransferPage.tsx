@@ -12,7 +12,7 @@ import { useAccounts } from "@/hooks/useAccounts";
 import { useBeneficiaries } from "@/hooks/useBeneficiaries";
 import { useAuth } from "@/hooks/useAuth";
 import { useKyc } from "@/hooks/useKyc";
-import { initiateTransfer, fetchTransferQuote } from "@/services/transactions";
+import { initiateTransfer, fetchTransferQuote, resolveAccount } from "@/services/transactions";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -52,9 +52,14 @@ export default function TransferPage() {
   const [sourceAccount, setSourceAccount] = useState<BankAccount | null>(null);
 
   // Step 2: Destination
-  const [destType, setDestType] = useState<"OWN" | "BENEFICIARY" | "NEW">("OWN");
+  const [destType, setDestType] = useState<"OWN" | "BENEFICIARY" | "NEW" | "SWENTRA">("OWN");
   const [destAccount, setDestAccount] = useState<BankAccount | null>(null);
   const [destBeneficiary, setDestBeneficiary] = useState<Beneficiary | null>(null);
+
+  const [swentraRecipient, setSwentraRecipient] = useState({ accountNumber: "", holderName: "", currency: "CHF" });
+  const [swentraResolving, setSwentraResolving] = useState(false);
+  const [swentraError, setSwentraError] = useState("");
+  const [newRecipientHint, setNewRecipientHint] = useState("");
   
   const [newRecipient, setNewRecipient] = useState({
     fullName: "",
@@ -97,16 +102,24 @@ export default function TransferPage() {
     
     let type: TransactionType = "EXTERNAL_WIRE";
     let destCurrency = "USD";
+    let recipientAccountNumber = "";
 
     if (destType === "OWN" && destAccount) {
       type = "INTERNAL_TRANSFER";
       destCurrency = destAccount.currency;
+      recipientAccountNumber = destAccount.accountNumber;
     } else if (destType === "BENEFICIARY" && destBeneficiary) {
       type = destBeneficiary.type === "INTERNAL" ? "SWENTRA_TRANSFER" : "EXTERNAL_WIRE";
       destCurrency = destBeneficiary.currency || "USD";
+      recipientAccountNumber = destBeneficiary.accountNumber;
     } else if (destType === "NEW") {
       type = "EXTERNAL_WIRE";
       destCurrency = newRecipient.currency;
+      recipientAccountNumber = newRecipient.accountNumber;
+    } else if (destType === "SWENTRA") {
+      type = "SWENTRA_TRANSFER";
+      destCurrency = swentraRecipient.currency;
+      recipientAccountNumber = swentraRecipient.accountNumber;
     }
 
     try {
@@ -115,6 +128,7 @@ export default function TransferPage() {
         destinationCurrency: destCurrency,
         amount: numericAmount,
         type,
+        recipientAccountNumber,
       });
       setQuote(q);
       const diff = Math.max(0, Math.floor((new Date(q.expiresAt).getTime() - new Date().getTime()) / 1000));
@@ -124,6 +138,48 @@ export default function TransferPage() {
       setError(err.message);
     } finally {
       setQuoteLoading(false);
+    }
+  };
+
+  const handleResolveSwentra = async () => {
+    const acct = swentraRecipient.accountNumber.replace(/\s/g, "");
+    setSwentraError("");
+    setSwentraRecipient((p) => ({ ...p, holderName: "" }));
+    if (!acct) {
+      setSwentraError("Enter a Swentra Vault account number.");
+      return;
+    }
+    setSwentraResolving(true);
+    try {
+      const res = await resolveAccount(acct);
+      if (res.found) {
+        setSwentraRecipient((p) => ({
+          ...p,
+          accountNumber: acct,
+          holderName: res.holderName || "Swentra Vault User",
+          currency: res.currency || p.currency,
+        }));
+      } else {
+        setSwentraError("No Swentra Vault account with that number.");
+      }
+    } catch (err: any) {
+      setSwentraError(err?.message || "Could not verify the account.");
+    } finally {
+      setSwentraResolving(false);
+    }
+  };
+
+  const handleNewRecipientAccountBlur = async () => {
+    const acct = newRecipient.accountNumber.replace(/\s/g, "");
+    setNewRecipientHint("");
+    if (!acct) return;
+    try {
+      const res = await resolveAccount(acct);
+      if (res.found) {
+        setNewRecipientHint("This looks like a Swentra Vault account — switch to 'Swentra transfer' so the recipient is credited instantly.");
+      }
+    } catch {
+      /* ignore */
     }
   };
 
@@ -173,6 +229,13 @@ export default function TransferPage() {
           bankName: newRecipient.bankName,
           swiftCode: newRecipient.swiftCode,
           currency: newRecipient.currency,
+        };
+      } else if (destType === "SWENTRA") {
+        recipientDetails = {
+          type: "INTERNAL",
+          fullName: swentraRecipient.holderName || "Swentra Vault User",
+          accountNumber: swentraRecipient.accountNumber,
+          currency: swentraRecipient.currency,
         };
       }
 
@@ -280,24 +343,30 @@ export default function TransferPage() {
             </h2>
           </div>
 
-          <div className="flex bg-surface/30 p-1 rounded-lg border border-border">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1 bg-surface/30 p-1 rounded-lg border border-border">
             <button
               onClick={() => setDestType("OWN")}
-              className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", destType === "OWN" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              className={cn("py-2 text-xs sm:text-sm font-medium rounded-md transition-colors", destType === "OWN" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               My Accounts
             </button>
             <button
               onClick={() => setDestType("BENEFICIARY")}
-              className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", destType === "BENEFICIARY" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              className={cn("py-2 text-xs sm:text-sm font-medium rounded-md transition-colors", destType === "BENEFICIARY" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               Saved Payees
             </button>
             <button
               onClick={() => setDestType("NEW")}
-              className={cn("flex-1 py-2 text-sm font-medium rounded-md transition-colors", destType === "NEW" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+              className={cn("py-2 text-xs sm:text-sm font-medium rounded-md transition-colors", destType === "NEW" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
             >
               New Recipient
+            </button>
+            <button
+              onClick={() => setDestType("SWENTRA")}
+              className={cn("py-2 text-xs sm:text-sm font-medium rounded-md transition-colors", destType === "SWENTRA" ? "bg-surface text-foreground shadow-sm" : "text-muted-foreground hover:text-foreground")}
+            >
+              Swentra
             </button>
           </div>
 
@@ -378,6 +447,7 @@ export default function TransferPage() {
                     <Input 
                       value={newRecipient.accountNumber} 
                       onChange={e => setNewRecipient({...newRecipient, accountNumber: e.target.value})} 
+                      onBlur={handleNewRecipientAccountBlur}
                       placeholder="e.g. 123456789" 
                     />
                   </div>
@@ -420,6 +490,58 @@ export default function TransferPage() {
                     setStep(3);
                   }}
                   disabled={!newRecipient.fullName || !newRecipient.accountNumber || !newRecipient.bankName}
+                >
+                  Continue
+                </Button>
+                {newRecipientHint && (
+                  <p className="text-xs text-amber-500" role="alert">{newRecipientHint}</p>
+                )}
+              </div>
+            )}
+
+            {destType === "SWENTRA" && (
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label>Swentra Vault account number</Label>
+                  <div className="flex gap-2">
+                    <Input
+                      value={swentraRecipient.accountNumber}
+                      onChange={(e) => {
+                        setSwentraRecipient((p) => ({ ...p, accountNumber: e.target.value, holderName: "" }));
+                        setSwentraError("");
+                      }}
+                      placeholder="e.g. 2533 7366 6096"
+                    />
+                    <Button
+                      variant="outline"
+                      onClick={handleResolveSwentra}
+                      disabled={swentraResolving || !swentraRecipient.accountNumber}
+                    >
+                      {swentraResolving ? "Verifying…" : "Verify"}
+                    </Button>
+                  </div>
+                </div>
+
+                {swentraError && (
+                  <p className="text-sm text-destructive" role="alert">{swentraError}</p>
+                )}
+
+                {swentraRecipient.holderName && (
+                  <div className="rounded-lg border border-primary/20 bg-primary/5 p-3 text-sm space-y-0.5">
+                    <div className="text-[0.65rem] tracking-widest text-muted-foreground uppercase">Sending to</div>
+                    <div className="font-medium text-foreground">{swentraRecipient.holderName}</div>
+                    <div className="text-xs text-muted-foreground">{swentraRecipient.currency} account</div>
+                  </div>
+                )}
+
+                <Button
+                  className="w-full mt-2 h-11"
+                  onClick={() => {
+                    setDestAccount(null);
+                    setDestBeneficiary(null);
+                    setStep(3);
+                  }}
+                  disabled={!swentraRecipient.holderName}
                 >
                   Continue
                 </Button>
@@ -556,14 +678,18 @@ export default function TransferPage() {
                     ? "My Account"
                     : destType === "BENEFICIARY" 
                       ? destBeneficiary?.fullName 
-                      : newRecipient.fullName}
+                      : destType === "SWENTRA"
+                        ? swentraRecipient.holderName
+                        : newRecipient.fullName}
                   <br />
                   <span className="text-muted-foreground font-normal text-xs font-mono">
                     {destType === "OWN"
                       ? formatAccount(destAccount!.accountNumber)
                       : destType === "BENEFICIARY"
                         ? destBeneficiary?.accountNumber
-                        : newRecipient.accountNumber}
+                        : destType === "SWENTRA"
+                          ? swentraRecipient.accountNumber
+                          : newRecipient.accountNumber}
                   </span>
                 </span>
               </div>
