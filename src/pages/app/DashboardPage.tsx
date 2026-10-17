@@ -136,6 +136,8 @@ export default function DashboardPage() {
               <div className="divide-y divide-border">
                 {recentTransactions.map(tx => {
                   const isOutgoing = tx.amount < 0
+                  const isReversed = !!tx.reversed
+                  const isReversal = (tx.reference || '').toUpperCase().startsWith('REVERSAL') || tx.type === 'REVERSAL_DEBIT'
                   return (
                     <button 
                       key={tx.id} 
@@ -151,7 +153,7 @@ export default function DashboardPage() {
                         </div>
                         <div>
                           <div className="font-medium text-sm text-foreground">
-                            {(tx.reference || '').toUpperCase().startsWith('REVERSAL') || tx.type === 'REVERSAL_DEBIT'
+                            {isReversal
                               ? 'Reversal'
                               : isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
                           </div>
@@ -163,12 +165,16 @@ export default function DashboardPage() {
                       <div className="text-right">
                         <div className={cn(
                           "font-mono text-sm",
-                          isOutgoing ? "text-foreground" : "text-primary"
+                          isOutgoing ? "text-foreground" : "text-primary",
+                          isReversed && "line-through text-muted-foreground"
                         )}>
                           {formatAmount(tx.amount, tx.currency)}
                         </div>
-                        {tx.reversed && (
+                        {isReversed && (
                           <div className="text-[10px] uppercase tracking-wider text-destructive">Reversed</div>
+                        )}
+                        {!isReversed && isReversal && (
+                          <div className="text-[10px] uppercase tracking-wider text-muted-foreground">Reversal</div>
                         )}
                       </div>
                     </button>

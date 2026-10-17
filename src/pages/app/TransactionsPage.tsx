@@ -122,6 +122,8 @@ export default function TransactionsPage() {
                 <div className="divide-y divide-border">
                   {group.items.map((tx) => {
                     const isOutgoing = tx.amount < 0
+                    const isReversed = !!tx.reversed
+                    const isReversal = (tx.reference || '').toUpperCase().startsWith('REVERSAL') || tx.type === 'REVERSAL_DEBIT'
                     
                     return (
                       <div 
@@ -139,7 +141,7 @@ export default function TransactionsPage() {
                           
                           <div>
                             <div className="font-medium text-foreground group-hover:text-primary transition-colors">
-                              {(tx.reference || '').toUpperCase().startsWith('REVERSAL') || tx.type === 'REVERSAL_DEBIT'
+                              {isReversal
                                 ? 'Reversal'
                                 : isOutgoing ? `To ${tx.recipientDetails?.fullName || 'Account'}` : `From ${tx.sourceDetails?.senderName || 'Account'}`}
                             </div>
@@ -155,23 +157,29 @@ export default function TransactionsPage() {
                           <div>
                             <div className={cn(
                               "font-medium",
-                              isOutgoing ? "text-foreground" : "text-primary"
+                              isOutgoing ? "text-foreground" : "text-primary",
+                              isReversed && "line-through text-muted-foreground"
                             )}>
                               {formatAmount(tx.amount, tx.currency)}
                             </div>
                             <div className="mt-1 flex items-center justify-end gap-1">
-                              <span className={cn(
-                                "inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-medium tracking-wide uppercase",
-                                tx.status === 'COMPLETED' && "bg-primary/10 text-primary",
-                                tx.status === 'PROCESSING' && "bg-secondary text-secondary-foreground",
-                                tx.status === 'PENDING' && "bg-muted text-muted-foreground",
-                                tx.status === 'FAILED' && "bg-destructive/10 text-destructive"
-                              )}>
-                                {tx.status}
-                              </span>
-                              {tx.reversed && (
+                              {isReversed ? (
                                 <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-medium tracking-wide uppercase bg-destructive/10 text-destructive">
                                   Reversed
+                                </span>
+                              ) : isReversal ? (
+                                <span className="inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-medium tracking-wide uppercase bg-muted text-muted-foreground">
+                                  Reversal
+                                </span>
+                              ) : (
+                                <span className={cn(
+                                  "inline-flex items-center rounded-full px-2 py-0.5 text-[0.65rem] font-medium tracking-wide uppercase",
+                                  tx.status === 'COMPLETED' && "bg-primary/10 text-primary",
+                                  tx.status === 'PROCESSING' && "bg-secondary text-secondary-foreground",
+                                  tx.status === 'PENDING' && "bg-muted text-muted-foreground",
+                                  tx.status === 'FAILED' && "bg-destructive/10 text-destructive"
+                                )}>
+                                  {tx.status}
                                 </span>
                               )}
                             </div>
