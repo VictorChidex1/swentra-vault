@@ -247,16 +247,22 @@ export const resolveAccount = functions.https.onCall(async (data, context) => {
   const currency = reg.data()!.currency as string;
 
   let holderName = '';
+  // Prefer the KYC legal name (personalDetails) — the name shown in Settings.
   try {
-    const authUser = await getAuth().getUser(assignedTo);
-    holderName = authUser.displayName || '';
+    const kyc = await db.collection('users').doc(assignedTo).collection('kyc').doc('submission').get();
+    if (kyc.exists) {
+      const p = kyc.data()?.personalDetails;
+      if (p && (p.firstName || p.lastName)) {
+        holderName = `${p.firstName || ''} ${p.lastName || ''}`.trim();
+      }
+    }
   } catch {
     /* ignore */
   }
   if (!holderName) {
     try {
-      const kyc = await db.collection('users').doc(assignedTo).collection('kyc').doc('submission').get();
-      holderName = (kyc.exists && (kyc.data()?.fullName as string)) || '';
+      const authUser = await getAuth().getUser(assignedTo);
+      holderName = authUser.displayName || '';
     } catch {
       /* ignore */
     }

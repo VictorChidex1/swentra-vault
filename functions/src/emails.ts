@@ -229,6 +229,10 @@ interface TransactionEmailData {
   status: string;
   reference: string;
   exchangeRate?: number;
+  beneficiaryName?: string;
+  balance?: number;
+  availableBalance?: number;
+  balanceCurrency?: string;
   recipientDetails?: {
     fullName?: string;
     bankName?: string;
@@ -239,29 +243,122 @@ interface TransactionEmailData {
   createdAt?: unknown;
 }
 
-function formatTimestamp(rawDate: unknown): string {
+function toDate(rawDate: unknown): Date {
   try {
     if (
       rawDate &&
       typeof (rawDate as { toDate?: () => Date }).toDate === "function"
     ) {
-      return (rawDate as { toDate: () => Date }).toDate().toUTCString();
+      return (rawDate as { toDate: () => Date }).toDate();
     }
     if (
       rawDate &&
       typeof (rawDate as { toMillis?: () => number }).toMillis === "function"
     ) {
-      return new Date(
-        (rawDate as { toMillis: () => number }).toMillis(),
-      ).toUTCString();
+      return new Date((rawDate as { toMillis: () => number }).toMillis());
     }
     if (typeof rawDate === "string" || typeof rawDate === "number") {
-      return new Date(rawDate).toUTCString();
+      return new Date(rawDate);
     }
   } catch {
     // fallback below
   }
-  return new Date().toUTCString();
+  return new Date();
+}
+
+// Transaction times are always rendered in Swiss time (Europe/Zurich), the
+// Vault's operating timezone.
+function formatTimestamp(rawDate: unknown): string {
+  const date = toDate(rawDate);
+  try {
+    return new Intl.DateTimeFormat("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Europe/Zurich",
+      timeZoneName: "short",
+    }).format(date);
+  } catch {
+    return date.toUTCString();
+  }
+}
+
+/**
+ * Resolve a user's legal full name from their KYC submission
+ * (personalDetails.firstName + lastName — the same name shown in Settings),
+ * falling back to the Auth display name.
+ */
+async function resolveLegalName(uid: string | undefined): Promise<string | null> {
+  if (!uid) return null;
+  try {
+    const db = getFirestore();
+    const kyc = await db
+      .collection("users")
+      .doc(uid)
+      .collection("kyc")
+      .doc("submission")
+      .get();
+    const p = kyc.exists ? kyc.data()?.personalDetails : null;
+    if (p && (p.firstName || p.lastName)) {
+      const name = `${p.firstName || ""} ${p.lastName || ""}`.trim();
+      if (name) return name;
+    }
+  } catch {
+    /* ignore — fall through to Auth */
+  }
+  try {
+    const user = await getAuth().getUser(uid);
+    return user.displayName || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Read the current + available balance of a user's account. */
+async function resolveBalances(
+  uid: string | undefined,
+  accountId: string | undefined,
+): Promise<{ balance: number; availableBalance: number; currency?: string } | null> {
+  if (!uid || !accountId) return null;
+  try {
+    const db = getFirestore();
+    const acct = await db
+      .collection("users")
+      .doc(uid)
+      .collection("accounts")
+      .doc(accountId)
+      .get();
+    if (!acct.exists) return null;
+    const d = acct.data()!;
+    return {
+      balance: typeof d.balance === "number" ? d.balance : 0,
+      availableBalance:
+        typeof d.availableBalance === "number" ? d.availableBalance : 0,
+      currency: typeof d.currency === "string" ? d.currency : undefined,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** For an internal transfer, resolve the beneficiary's user id. */
+async function resolveBeneficiaryUid(tx: {
+  counterpartyUid?: string;
+  recipientDetails?: { accountNumber?: string };
+}): Promise<string | null> {
+  if (tx.counterpartyUid) return tx.counterpartyUid;
+  const acctNum = String(tx.recipientDetails?.accountNumber || "").replace(/\s/g, "");
+  if (!acctNum) return null;
+  try {
+    const db = getFirestore();
+    const reg = await db.collection("accountNumbers").doc(acctNum).get();
+    return reg.exists ? ((reg.data()?.assignedTo as string) || null) : null;
+  } catch {
+    return null;
+  }
 }
 
 function buildTransactionReceiptHtml({
@@ -290,7 +387,7 @@ function buildTransactionReceiptHtml({
     tx.currency,
   )}`;
 
-  const recipientFullName = tx.recipientDetails?.fullName;
+  const recipientFullName = tx.beneficiaryName || tx.recipientDetails?.fullName;
   const recipientBank = tx.recipientDetails?.bankName;
   const maskedAcc = maskAccountNumber(tx.recipientDetails?.accountNumber);
 
@@ -321,6 +418,10 @@ function buildTransactionReceiptHtml({
     {
       label: "Reference",
       value: tx.reference || "Funds Transfer",
+    },
+    {
+      label: "Date & Time",
+      value: formatTimestamp(tx.createdAt),
     },
   ];
 
@@ -366,6 +467,22 @@ function buildTransactionReceiptHtml({
     rows.push({
       label: "Routing Number",
       value: tx.recipientDetails.routingNumber,
+      isMono: true,
+    });
+  }
+
+  if (typeof tx.balance === "number") {
+    rows.push({
+      label: "Current Balance",
+      value: formatMoney(tx.balance, tx.balanceCurrency || tx.currency),
+      isMono: true,
+    });
+  }
+
+  if (typeof tx.availableBalance === "number") {
+    rows.push({
+      label: "Available Balance",
+      value: formatMoney(tx.availableBalance, tx.balanceCurrency || tx.currency),
       isMono: true,
     });
   }
@@ -612,6 +729,7 @@ function buildTransactionReceiptText({
     `- Type: ${TRANSACTION_TYPE_LABELS[tx.type] || tx.type || "Transaction"}`,
     `- Status: ${statusLabel}`,
     `- Reference: ${tx.reference || "Funds Transfer"}`,
+    `- Date & Time: ${formattedTimestamp}`,
     ...(tx.exchangeRate && tx.exchangeRate !== 1
       ? [`- Exchange Rate: ${tx.exchangeRate}`]
       : []),
@@ -630,6 +748,12 @@ function buildTransactionReceiptText({
       : []),
     ...(tx.recipientDetails?.swiftCode
       ? [`- SWIFT / BIC: ${tx.recipientDetails.swiftCode}`]
+      : []),
+    ...(typeof tx.balance === "number"
+      ? [`- Current Balance: ${formatMoney(tx.balance, tx.balanceCurrency || tx.currency)}`]
+      : []),
+    ...(typeof tx.availableBalance === "number"
+      ? [`- Available Balance: ${formatMoney(tx.availableBalance, tx.balanceCurrency || tx.currency)}`]
       : []),
     `- Transaction ID: ${tx.transactionId}`,
     "",
@@ -676,6 +800,23 @@ export async function sendTransactionConfirmationEmail({
   const status: string = tx.status || "COMPLETED";
   const reference: string = tx.reference || "Funds Transfer";
 
+  // Beneficiary legal name: internal transfers resolve the counterparty's KYC
+  // name; external wires use the beneficiary name entered at transfer time.
+  const isInternal =
+    tx.type === "SWENTRA_TRANSFER" || tx.type === "INTERNAL_TRANSFER";
+  let beneficiaryName: string | undefined;
+  if (isInternal) {
+    const beneficiaryUid = await resolveBeneficiaryUid(tx);
+    beneficiaryName =
+      (await resolveLegalName(beneficiaryUid || undefined)) ||
+      tx.recipientDetails?.fullName ||
+      undefined;
+  } else {
+    beneficiaryName = tx.recipientDetails?.fullName || undefined;
+  }
+
+  const balances = await resolveBalances(uid, tx.sourceAccountId);
+
   const txData: TransactionEmailData = {
     transactionId,
     type: tx.type || "EXTERNAL_WIRE",
@@ -686,6 +827,10 @@ export async function sendTransactionConfirmationEmail({
     status,
     reference,
     exchangeRate: tx.exchangeRate,
+    beneficiaryName,
+    balance: balances?.balance,
+    availableBalance: balances?.availableBalance,
+    balanceCurrency: balances?.currency,
     recipientDetails: tx.recipientDetails,
     createdAt: tx.createdAt,
   };
@@ -720,6 +865,9 @@ interface IncomingTransferEmailData {
   reference: string;
   senderName: string;
   recipientAccount: string;
+  balance?: number;
+  availableBalance?: number;
+  balanceCurrency?: string;
   createdAt?: unknown;
 }
 
@@ -763,6 +911,10 @@ function buildIncomingTransferReceiptHtml({
       value: tx.reference || "Funds Transfer",
     },
     {
+      label: "Date & Time",
+      value: formatTimestamp(tx.createdAt),
+    },
+    {
       label: "Amount Credited",
       value: formattedAmount,
       isMono: true,
@@ -772,6 +924,27 @@ function buildIncomingTransferReceiptHtml({
       value: tx.recipientAccount,
       isMono: true,
     },
+    ...(typeof tx.balance === "number"
+      ? [
+          {
+            label: "Current Balance",
+            value: formatMoney(tx.balance, tx.balanceCurrency || tx.currency),
+            isMono: true,
+          },
+        ]
+      : []),
+    ...(typeof tx.availableBalance === "number"
+      ? [
+          {
+            label: "Available Balance",
+            value: formatMoney(
+              tx.availableBalance,
+              tx.balanceCurrency || tx.currency,
+            ),
+            isMono: true,
+          },
+        ]
+      : []),
     {
       label: "Clearing Protocol",
       value: "Swentra Internal Clearing (SIC)",
@@ -994,7 +1167,14 @@ function buildIncomingTransferReceiptText({
     `- Settlement Status: Completed (Immediate Availability)`,
     `- Originating Sender: ${tx.senderName}`,
     `- Payment Reference: ${tx.reference || "Funds Transfer"}`,
+    `- Date & Time: ${formattedTimestamp}`,
     `- Credited Account: ${tx.recipientAccount}`,
+    ...(typeof tx.balance === "number"
+      ? [`- Current Balance: ${formatMoney(tx.balance, tx.balanceCurrency || tx.currency)}`]
+      : []),
+    ...(typeof tx.availableBalance === "number"
+      ? [`- Available Balance: ${formatMoney(tx.availableBalance, tx.balanceCurrency || tx.currency)}`]
+      : []),
     `- Clearing Protocol: Swentra Internal Clearing (SIC)`,
     `- Transaction ID: ${tx.transactionId}`,
     "",
@@ -1039,7 +1219,8 @@ export async function sendIncomingTransferEmail({
   const reference: string = tx.reference || "Incoming Transfer";
   const status: string = tx.status || "COMPLETED";
 
-  let senderName = tx.sourceDetails?.senderName;
+  const senderLegalName = await resolveLegalName(tx.sourceDetails?.senderId);
+  let senderName = senderLegalName || tx.sourceDetails?.senderName;
   if (!senderName && tx.sourceDetails?.senderId) {
     try {
       const senderUser = await getAuth().getUser(tx.sourceDetails.senderId);
@@ -1051,6 +1232,8 @@ export async function sendIncomingTransferEmail({
   if (!senderName) {
     senderName = "Swentra Vault Client";
   }
+
+  const balances = await resolveBalances(uid, tx.accountId);
 
   const recipientAccount = tx.accountNumber
     ? maskAccountNumber(tx.accountNumber)
@@ -1067,6 +1250,9 @@ export async function sendIncomingTransferEmail({
     reference,
     senderName,
     recipientAccount,
+    balance: balances?.balance,
+    availableBalance: balances?.availableBalance,
+    balanceCurrency: balances?.currency,
     createdAt: tx.createdAt,
   };
 
