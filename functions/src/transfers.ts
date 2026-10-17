@@ -2,6 +2,7 @@ import * as functions from "firebase-functions/v1";
 import { getAuth } from "firebase-admin/auth";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { sendTransactionConfirmationEmail, sendIncomingTransferEmail } from "./emails";
+import { resolveLegalName } from "./names";
 
 export const executeTransfer = functions.https.onCall(async (data, context) => {
   if (!context.auth) throw new functions.https.HttpsError('unauthenticated', 'Must be logged in');
@@ -11,6 +12,11 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
   const db = getFirestore();
 
   if (!quoteId) throw new functions.https.HttpsError('invalid-argument', 'Missing quote ID');
+
+  // The recipient should see the sender's legal name (KYC), not their email.
+  // Resolve it before the transaction (the token "name" claim is only set when
+  // the account has a display name, and it is a display name — not legal).
+  const senderLegalName = await resolveLegalName(uid);
 
   const adminQuery = await db.collection('users').where('role', '==', 'admin').limit(1).get();
   if (adminQuery.empty) throw new functions.https.HttpsError('internal', 'Treasury uninitialized');
@@ -164,7 +170,10 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
     if ((type === 'SWENTRA_TRANSFER' || type === 'INTERNAL_TRANSFER') && destinationUid) {
       const recipientTxRef = db.collection(`users/${destinationUid}/transactions`).doc();
       recipientTxId = recipientTxRef.id;
-      const senderName = (context.auth?.token?.name as string) || (context.auth?.token?.email as string) || 'Swentra Client';
+      const senderName = senderLegalName
+        || (context.auth?.token?.name as string)
+        || (context.auth?.token?.email as string)
+        || 'Swentra Client';
       const senderEmail = (context.auth?.token?.email as string) || '';
       t.set(recipientTxRef, {
         id: recipientTxRef.id,
@@ -246,27 +255,7 @@ export const resolveAccount = functions.https.onCall(async (data, context) => {
   const assignedTo = reg.data()!.assignedTo as string;
   const currency = reg.data()!.currency as string;
 
-  let holderName = '';
-  // Prefer the KYC legal name (personalDetails) — the name shown in Settings.
-  try {
-    const kyc = await db.collection('users').doc(assignedTo).collection('kyc').doc('submission').get();
-    if (kyc.exists) {
-      const p = kyc.data()?.personalDetails;
-      if (p && (p.firstName || p.lastName)) {
-        holderName = `${p.firstName || ''} ${p.lastName || ''}`.trim();
-      }
-    }
-  } catch {
-    /* ignore */
-  }
-  if (!holderName) {
-    try {
-      const authUser = await getAuth().getUser(assignedTo);
-      holderName = authUser.displayName || '';
-    } catch {
-      /* ignore */
-    }
-  }
+  const holderName = (await resolveLegalName(assignedTo)) || '';
 
   return { found: true, currency, holderName: holderName || null };
 });

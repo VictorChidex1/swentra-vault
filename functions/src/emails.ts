@@ -9,6 +9,8 @@ import {
   resend,
 } from "./config";
 
+import { resolveLegalName } from "./names";
+
 export interface EmailContent {
   heading: string;
   body: string;
@@ -283,37 +285,6 @@ function formatTimestamp(rawDate: unknown): string {
     }).format(date);
   } catch {
     return date.toUTCString();
-  }
-}
-
-/**
- * Resolve a user's legal full name from their KYC submission
- * (personalDetails.firstName + lastName — the same name shown in Settings),
- * falling back to the Auth display name.
- */
-async function resolveLegalName(uid: string | undefined): Promise<string | null> {
-  if (!uid) return null;
-  try {
-    const db = getFirestore();
-    const kyc = await db
-      .collection("users")
-      .doc(uid)
-      .collection("kyc")
-      .doc("submission")
-      .get();
-    const p = kyc.exists ? kyc.data()?.personalDetails : null;
-    if (p && (p.firstName || p.lastName)) {
-      const name = `${p.firstName || ""} ${p.lastName || ""}`.trim();
-      if (name) return name;
-    }
-  } catch {
-    /* ignore — fall through to Auth */
-  }
-  try {
-    const user = await getAuth().getUser(uid);
-    return user.displayName || null;
-  } catch {
-    return null;
   }
 }
 
