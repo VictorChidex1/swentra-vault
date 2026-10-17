@@ -134,12 +134,44 @@ const dnOf = async (uid) => {
   return dnCache.get(uid);
 };
 
+// Discover every user id we might need to scan. We cannot rely on the `users`
+// collection alone — a user can hold an account (and transactions) without a
+// users/{uid} document. Union: users docs + account holders + all Auth users.
+async function collectUids() {
+  const set = new Set();
+  for (const d of await listDocs('users')) set.add(relPath(d.name).split('/')[1]);
+
+  try {
+    for (const d of await listDocs('accountNumbers')) {
+      const assignedTo = str(d.fields?.assignedTo);
+      if (assignedTo) set.add(assignedTo);
+    }
+  } catch (e) {
+    console.warn(`  (accountNumbers scan skipped: ${e.message})`);
+  }
+
+  try {
+    let pageToken;
+    do {
+      const url = `${IDT_BASE}/accounts:batchGet?maxResults=1000${pageToken ? `&pageToken=${pageToken}` : ''}`;
+      const res = await fetch(url, { headers: authHeaders() });
+      if (!res.ok) break;
+      const j = await res.json();
+      (j.users || []).forEach((u) => u.localId && set.add(u.localId));
+      pageToken = j.nextPageToken;
+    } while (pageToken);
+  } catch {
+    /* Auth listing is best-effort */
+  }
+
+  return [...set];
+}
+
 async function main() {
   console.log(`Target: ${EMULATOR ? `EMULATOR (${EMULATOR})` : 'PRODUCTION'}  |  mode: ${APPLY ? 'APPLY (writing)' : 'DRY-RUN'}`);
 
-  const userDocs = await listDocs('users');
-  const uids = userDocs.map((d) => relPath(d.name).split('/')[1]);
-  console.log(`users: ${uids.length}`);
+  const uids = await collectUids();
+  console.log(`users/account holders to scan: ${uids.length}`);
 
   const changes = [];
   let scanned = 0;
