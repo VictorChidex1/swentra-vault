@@ -2,6 +2,12 @@ import * as functions from "firebase-functions/v1";
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
 import { recordAudit } from "./audit";
 
+function maskAccount(acct?: string): string {
+  const c = (acct || "").replace(/\s/g, "");
+  if (!c) return "";
+  return c.length <= 4 ? `****${c}` : `****${c.slice(-4)}`;
+}
+
 // Admin Process Funding (Deposit/Withdraw)
 export const adminProcessFunding = functions.https.onCall(async (data, context) => {
   if (!context.auth || !context.auth.token.admin) {
@@ -268,6 +274,7 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
 
   let reversalTxId: string | null = null;
   let clawbackUid: string | null = null;
+  let revOriginal: Record<string, unknown> = {};
 
   const result = await db.runTransaction(async (t) => {
     // ---- READS ----
@@ -284,6 +291,25 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
     const principal = Math.abs(tx.amount ?? 0);
     const fee = tx.fee ?? 0;
     const totalDebit = Math.abs(tx.totalDebit ?? principal + fee);
+
+    // Snapshot of the original transaction, stored on the audit record so the
+    // "Recently reversed" view can show amount/recipient with zero extra reads.
+    revOriginal = {
+      originalTransactionId: transactionId,
+      type: tx.type,
+      reference: tx.reference,
+      amount: principal,
+      fee,
+      totalDebit,
+      currency,
+      recipient: tx.recipientDetails
+        ? {
+            fullName: tx.recipientDetails.fullName ?? null,
+            bankName: tx.recipientDetails.bankName ?? null,
+            accountNumber: maskAccount(tx.recipientDetails.accountNumber),
+          }
+        : null,
+    };
 
     const sourceAccountId = tx.sourceAccountId;
     if (!sourceAccountId) throw new functions.https.HttpsError('invalid-argument', 'Transaction has no source account');
@@ -425,7 +451,7 @@ export const adminReverseTransaction = functions.https.onCall(async (data, conte
     reason: reversalReason,
     result: 'success',
     description: `Reversed transaction ${transactionId}`,
-    details: { reversalTxId, clawbackUid },
+    details: { reversalTxId, clawbackUid, ...revOriginal },
   });
 
   return result;

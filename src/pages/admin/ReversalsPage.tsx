@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { collection, query, getDocs, orderBy, limit } from 'firebase/firestore'
+import { collection, query, getDocs, orderBy, limit, doc, getDoc } from 'firebase/firestore'
 import { httpsCallable } from 'firebase/functions'
 import { db, functions } from '@/lib/firebase'
 import { useAdminCache } from '@/hooks/useAdminCache'
@@ -13,10 +13,24 @@ import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { formatCurrency } from '@/types/accounts'
 import { RotateCcwIcon, SearchIcon, Loader2Icon, ShieldAlertIcon } from 'lucide-react'
 
 const ELIGIBLE_TYPES = ['SWENTRA_TRANSFER', 'EXTERNAL_WIRE']
+const REV_PER_PAGE = 5
+
+function maskAcct(acct?: string): string {
+  const c = String(acct || '').replace(/\s/g, '')
+  if (!c) return ''
+  return c.length <= 4 ? `****${c}` : `****${c.slice(-4)}`
+}
 
 const TYPE_LABELS: Record<string, string> = {
   SWENTRA_TRANSFER: 'Swentra transfer',
@@ -38,6 +52,9 @@ export default function ReversalsPage() {
   const [target, setTarget] = useState<ReverseTarget | null>(null)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [range, setRange] = useState<DateRange>({ from: null, to: null })
+  const [revPage, setRevPage] = useState(0)
+  const [detail, setDetail] = useState<any | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
 
   const usersFetcher = useMemo(() => async () => {
     const adminListUsers = httpsCallable<void, { users: { uid: string; email: string }[] }>(functions, 'adminListUsers')
@@ -109,6 +126,49 @@ export default function ReversalsPage() {
       return matchesTerm && matchesType
     })
   }, [transactions, term, typeFilter])
+
+  const revEntries = (reversed || []) as any[]
+  const revPageCount = Math.max(1, Math.ceil(revEntries.length / REV_PER_PAGE))
+  const revSafePage = Math.min(revPage, revPageCount - 1)
+  const revSlice = revEntries.slice(revSafePage * REV_PER_PAGE, revSafePage * REV_PER_PAGE + REV_PER_PAGE)
+
+  async function openReversalDetail(entry: any) {
+    setDetail(entry)
+    const d = entry.details || {}
+    // Legacy entries (reversed before enrichment) lack the snapshot → fetch the
+    // original transaction once to fill it in.
+    if (d.amount === undefined && entry.targetUid && entry.transactionId) {
+      setDetailLoading(true)
+      try {
+        const snap = await getDoc(doc(db, 'users', entry.targetUid, 'transactions', entry.transactionId))
+        if (snap.exists()) {
+          const t = snap.data() as any
+          setDetail({
+            ...entry,
+            details: {
+              ...d,
+              originalTransactionId: entry.transactionId,
+              type: t.type,
+              reference: t.reference,
+              amount: Math.abs(t.amount ?? 0),
+              currency: t.currency,
+              recipient: t.recipientDetails
+                ? {
+                    fullName: t.recipientDetails.fullName,
+                    bankName: t.recipientDetails.bankName,
+                    accountNumber: maskAcct(t.recipientDetails.accountNumber),
+                  }
+                : null,
+            },
+          })
+        }
+      } catch (error) {
+        console.error('Failed to load original transaction:', error)
+      } finally {
+        setDetailLoading(false)
+      }
+    }
+  }
 
   return (
     <div className="space-y-8">
@@ -301,32 +361,121 @@ export default function ReversalsPage() {
           Recently reversed
         </h2>
         <p className="text-sm text-muted-foreground mt-1">
-          Latest reversals recorded in the audit trail.
+          Latest reversals from the audit trail. Tap one for details.
         </p>
-        <Card className="mt-4 bg-surface border-border divide-y divide-border">
-          {!reversed || reversed.length === 0 ? (
+        <Card className="mt-4 bg-surface border-border overflow-hidden">
+          {revEntries.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground text-center">
               No reversals recorded yet.
             </div>
           ) : (
-            reversed.map((a) => (
-              <div key={a.id} className="p-4 flex items-center justify-between gap-4">
-                <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">
-                    {a.description || 'Transaction reversed'}
-                  </div>
-                  <div className="text-xs text-muted-foreground truncate">
-                    {a.reason ? `Reason: ${a.reason}` : 'No reason recorded'} · by {a.actorUid || 'unknown'}
-                  </div>
-                </div>
-                <div className="text-xs text-muted-foreground whitespace-nowrap">
-                  {formatDate(a.occurredAt)}
-                </div>
+            <>
+              <div className="divide-y divide-border">
+                {revSlice.map((a) => {
+                  const d = a.details || {}
+                  return (
+                    <button
+                      key={a.id}
+                      type="button"
+                      onClick={() => openReversalDetail(a)}
+                      className="w-full text-left p-4 hover:bg-primary/5 transition-colors flex flex-col gap-1.5"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-medium text-destructive font-mono text-sm">
+                          {d.amount != null
+                            ? formatCurrency(d.amount, d.currency)
+                            : (a.description || 'Transaction reversed')}
+                        </span>
+                        <span className="text-xs text-muted-foreground whitespace-nowrap">
+                          {formatDate(a.occurredAt)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-muted-foreground truncate">
+                        {d.recipient?.fullName ? `→ ${d.recipient.fullName}` : 'Recipient not recorded'}
+                        {a.reason ? ` · Reason: ${a.reason}` : ''}
+                      </div>
+                    </button>
+                  )
+                })}
               </div>
-            ))
+              <TransactionPagination
+                pageIndex={revSafePage}
+                hasNext={revSafePage < revPageCount - 1}
+                canPrev={revSafePage > 0}
+                onPrev={() => setRevPage((p) => Math.max(0, p - 1))}
+                onNext={() => setRevPage((p) => p + 1)}
+              />
+            </>
           )}
         </Card>
       </div>
+
+      <Dialog open={!!detail} onOpenChange={(open) => !open && setDetail(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <RotateCcwIcon className="w-5 h-5 text-destructive" />
+              Reversal details
+            </DialogTitle>
+            <DialogDescription>Snapshot of the reversed transaction.</DialogDescription>
+          </DialogHeader>
+
+          {detail && (() => {
+            const d = detail.details || {}
+            return (
+              <div className="space-y-3 text-sm">
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Amount</span>
+                  <span className="text-right font-mono text-xs">
+                    {d.amount != null
+                      ? formatCurrency(d.amount, d.currency)
+                      : (detailLoading ? 'Loading…' : '—')}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Reason</span>
+                  <span className="text-right font-medium">{detail.reason || '—'}</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Recipient</span>
+                  <span className="text-right font-medium">
+                    {d.recipient?.fullName || '—'}
+                    {(d.recipient?.bankName || d.recipient?.accountNumber) && (
+                      <span className="block text-xs text-muted-foreground font-mono">
+                        {[d.recipient?.bankName, d.recipient?.accountNumber].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Type</span>
+                  <span className="text-right font-medium">{TYPE_LABELS[d.type] || d.type || '—'}</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Reference</span>
+                  <span className="text-right font-mono text-xs break-all">{d.reference || '—'}</span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Original transaction</span>
+                  <span className="text-right font-mono text-xs break-all">
+                    {d.originalTransactionId || detail.transactionId || '—'}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Reversed by</span>
+                  <span className="text-right font-medium">
+                    {userMap.get(detail.actorUid) || detail.actorUid || '—'}
+                  </span>
+                </div>
+                <div className="flex items-start justify-between gap-4">
+                  <span className="text-muted-foreground shrink-0">Date</span>
+                  <span className="text-right">{formatDate(detail.occurredAt)}</span>
+                </div>
+              </div>
+            )
+          })()}
+        </DialogContent>
+      </Dialog>
 
       <ReverseTransactionPicker
         open={pickerOpen}
