@@ -14,5 +14,6 @@ export * from "./wires";
 export * from "./adminUsers";
 export * from "./adminKyc";
 export * from "./adminSystem";
+export * from "./adminAudit";
 export * from "./adminFinance";
 export * from "./pin";
