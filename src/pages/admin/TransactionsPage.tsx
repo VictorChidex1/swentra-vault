@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react'
+import { useState, useMemo, useEffect } from 'react'
 import { httpsCallable } from 'firebase/functions'
 import { functions } from '@/lib/firebase'
 import { useAdminCache } from '@/hooks/useAdminCache'
@@ -228,6 +228,21 @@ export default function AdminTransactionsPage() {
     setSelectedTx(null)
     setAudit(null)
   }
+
+  // Close the audit drawer on Escape (clicking the backdrop is handled below).
+  // When the reversal dialog is open it is the topmost layer, so let it handle
+  // Escape first.
+  useEffect(() => {
+    if (!selectedTx || reversalTarget) return
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        setSelectedTx(null)
+        setAudit(null)
+      }
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [selectedTx, reversalTarget])
 
   const canReverse = (tx: AdminTransactionRecord) =>
     tx.amount < 0 && !tx.reversed && tx.status !== 'FAILED'
@@ -466,8 +481,8 @@ export default function AdminTransactionsPage() {
 
       {/* Audit Modal Overlay */}
       {selectedTx && (
-        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex justify-end">
-          <div className="w-full max-w-lg bg-surface h-full border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-300">
+        <div className="fixed inset-0 z-50 bg-background/80 backdrop-blur-sm flex justify-end" onClick={closeAudit}>
+          <div className="w-full max-w-lg bg-surface h-full border-l border-border shadow-2xl flex flex-col animate-in slide-in-from-right duration-300" onClick={(e) => e.stopPropagation()}>
             <div className="p-6 border-b border-border flex items-center justify-between bg-surface/50 backdrop-blur-md">
               <h2 className="font-medium text-lg flex items-center gap-2">
                 <FileTextIcon className="w-5 h-5 text-primary" />
