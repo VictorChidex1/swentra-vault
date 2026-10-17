@@ -164,13 +164,21 @@ export const executeTransfer = functions.https.onCall(async (data, context) => {
     if ((type === 'SWENTRA_TRANSFER' || type === 'INTERNAL_TRANSFER') && destinationUid) {
       const recipientTxRef = db.collection(`users/${destinationUid}/transactions`).doc();
       recipientTxId = recipientTxRef.id;
+      const senderName = (context.auth?.token?.name as string) || (context.auth?.token?.email as string) || 'Swentra Client';
+      const senderEmail = (context.auth?.token?.email as string) || '';
       t.set(recipientTxRef, {
         id: recipientTxRef.id,
         userId: destinationUid,
+        accountId: destinationAccountId,
+        accountNumber: recipientDetails.accountNumber,
         type: 'INCOMING_TRANSFER',
         amount: destinationAmount, // Positive for receiver
         currency: recipientDetails.currency || sourceData.currency,
-        sourceDetails: { senderId: uid },
+        sourceDetails: { 
+          senderId: uid,
+          senderName,
+          senderEmail
+        },
         reference: reference || 'Incoming Transfer',
         status: 'COMPLETED',
         sessionId,

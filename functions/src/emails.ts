@@ -1,4 +1,5 @@
 import { getFirestore, FieldValue } from "firebase-admin/firestore";
+import { getAuth } from "firebase-admin/auth";
 import { createHash } from "node:crypto";
 import {
   APP_URL,
@@ -379,15 +380,19 @@ function buildTransactionReceiptHtml({
     .map(
       (row) => `
       <tr>
-        <td valign="top" style="padding: 12px 0; border-bottom: 1px solid #1F1F23; font-size: 13px; color: #8E8E93; line-height: 1.4;" width="42%">
-          ${row.label}
+        <td valign="top" style="padding: 12px 0; border-bottom: 1px solid #232932; font-size: 13px; color: #D4D4D8 !important; line-height: 1.4;" width="42%">
+          <span style="color: #D4D4D8 !important; font-size: 13px; font-weight: 500; font-family: Roboto, Helvetica, Arial, sans-serif; display: inline-block;">
+            ${row.label}
+          </span>
         </td>
-        <td align="right" valign="top" style="padding: 12px 0; border-bottom: 1px solid #1F1F23; font-size: 13px; color: #FFFFFF; font-family: ${
-          row.isMono
-            ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
-            : '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif'
-        }; font-weight: 600; line-height: 1.4; word-break: break-word;" width="58%">
-          ${row.value}
+        <td align="right" valign="top" style="padding: 12px 0; border-bottom: 1px solid #232932; font-size: 13px; color: #FFFFFF !important; line-height: 1.4; word-break: break-word;" width="58%">
+          <span style="color: #FFFFFF !important; font-size: 13px; font-weight: 600; font-family: ${
+            row.isMono
+              ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+              : 'Roboto, Helvetica, Arial, sans-serif'
+          }; display: inline-block; word-break: break-word;">
+            ${row.value}
+          </span>
         </td>
       </tr>`,
     )
@@ -423,11 +428,11 @@ function buildTransactionReceiptHtml({
             <td style="background-color: #050505; border-bottom: 1px solid #222222; padding: 12px 24px;">
               <table width="100%" border="0" cellpadding="0" cellspacing="0">
                 <tr>
-                  <td valign="middle" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #888888; letter-spacing: 1.5px; text-transform: uppercase;">
-                    SWENTRA VAULT &bull; DISPATCH
+                  <td valign="middle" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #D4D4D8 !important; letter-spacing: 1.5px; text-transform: uppercase;">
+                    <span style="color: #D4D4D8 !important;">SWENTRA VAULT &bull; DEBIT DISPATCH</span>
                   </td>
                   <td align="right" valign="middle" style="white-space: nowrap; width: 1%;">
-                    <span style="display: inline-block; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; color: ${statusColor}; letter-spacing: 0.5px; background-color: ${statusBg}; border: 1px solid ${statusBorder}; padding: 4px 10px; border-radius: 4px; text-transform: uppercase;">
+                    <span style="display: inline-block; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; color: ${statusColor} !important; letter-spacing: 0.5px; background-color: ${statusBg}; border: 1px solid ${statusBorder}; padding: 4px 10px; border-radius: 4px; text-transform: uppercase;">
                       &#9679;&nbsp;${statusLabel.toUpperCase()}
                     </span>
                   </td>
@@ -439,40 +444,43 @@ function buildTransactionReceiptHtml({
           <!-- Main Content -->
           <tr>
             <td style="padding: 40px 24px;">
-              <!-- Logo -->
+              <!-- Obsidian Shield Logo Container -->
               <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
                 <tr>
                   <td>
-                    <img src="${APP_URL}/assets/swentra-vault-logo-256.png" alt="Swentra Vault" width="44" height="44" style="display: block; border: 0;" />
+                    <div style="display: inline-block; background-color: #000000; border: 1px solid #27272A; border-radius: 12px; padding: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                      <img src="${APP_URL}/assets/swentra-vault-logo-256.png" alt="Swentra Vault" width="44" height="44" style="display: block; border: 0; border-radius: 8px;" />
+                    </div>
                   </td>
                 </tr>
               </table>
 
               <!-- Heading & Subtitle -->
-              <h1 style="font-size: 24px; font-weight: 500; color: #FFFFFF; margin-bottom: 8px; letter-spacing: -0.5px;">
-                Transaction confirmed.
+              <h1 style="font-size: 24px; font-weight: 500; color: #FFFFFF !important; margin-bottom: 8px; letter-spacing: -0.5px;">
+                <span style="color: #FFFFFF !important;">Transaction confirmed.</span>
               </h1>
-              <p style="font-size: 14px; line-height: 1.5; color: #A1A1AA; margin-bottom: 28px;">
-                Funds have been successfully settled and recorded on the Swentra settlement ledger.
+              <p style="font-size: 14px; line-height: 1.5; color: #D4D4D8 !important; margin-bottom: 28px;">
+                <span style="color: #D4D4D8 !important;">Funds have been successfully settled and recorded on the Swentra settlement ledger.</span>
               </p>
 
               <!-- HERO DEBIT CARD -->
-              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #111113; border: 1px solid #27272A; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #121417; border: 1px solid #2A323D; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
                 <tr>
                   <td style="padding: 24px;">
                     <table width="100%" border="0" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #71717A; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 8px;">
-                          ${isIncoming ? "TOTAL CREDITED TO VAULT" : "TOTAL DEBITED FROM VAULT"}
+                        <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #00E559 !important; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 8px;">
+                          <span style="color: #00E559 !important; font-weight: 700;">${isIncoming ? "TOTAL CREDITED TO VAULT" : "TOTAL DEBITED FROM VAULT"}</span>
                         </td>
                       </tr>
                       <tr>
-                        <td style="font-size: 32px; font-weight: 700; color: #FFFFFF; letter-spacing: -0.5px; padding-bottom: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
-                          ${heroAmountDisplay}
+                        <td style="font-size: 32px; font-weight: 700; color: #FFFFFF !important; letter-spacing: -0.5px; padding-bottom: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                          <span style="color: #FFFFFF !important; font-weight: 700;">${heroAmountDisplay}</span>
                         </td>
                       </tr>
                       <tr>
-                        <td style="font-size: 12px; color: #71717A; padding-bottom: ${recipientHero ? "14px" : "0"};">
+                        <td style="font-size: 12px; color: #A1A1AA !important; padding-bottom: ${recipientHero ? "14px" : "0"};">
+                          <span style="color: #A1A1AA !important;">
                           ${
                             tx.fee > 0
                               ? `Transfer amount: ${formatMoney(
@@ -484,20 +492,21 @@ function buildTransactionReceiptHtml({
                                 )}`
                               : "Zero network fees incurred &bull; Instant settlement"
                           }
+                          </span>
                         </td>
                       </tr>
                       ${
                         recipientHero
                           ? `
                       <tr>
-                        <td style="border-top: 1px solid #1F1F23; padding-top: 14px;">
+                        <td style="border-top: 1px solid #232932; padding-top: 14px;">
                           <table width="100%" border="0" cellpadding="0" cellspacing="0">
                             <tr>
-                              <td width="20" valign="middle" style="color: #00E559; font-size: 14px; line-height: 1;">
-                                &#8594;
+                              <td width="20" valign="middle" style="color: #00E559 !important; font-size: 14px; line-height: 1;">
+                                <span style="color: #00E559 !important;">&#8594;</span>
                               </td>
-                              <td style="font-size: 13px; color: #E4E4E7; font-weight: 500;">
-                                ${recipientHero}
+                              <td style="font-size: 13px; color: #E4E4E7 !important; font-weight: 500;">
+                                <span style="color: #E4E4E7 !important;">Beneficiary: <strong style="color: #FFFFFF !important;">${recipientHero}</strong></span>
                               </td>
                             </tr>
                           </table>
@@ -511,13 +520,13 @@ function buildTransactionReceiptHtml({
               </table>
 
               <!-- STRUCTURED LEDGER CARD -->
-              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #111113; border: 1px solid #27272A; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #121417; border: 1px solid #2A323D; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
                 <tr>
                   <td style="padding: 20px 24px;">
                     <table width="100%" border="0" cellpadding="0" cellspacing="0">
                       <tr>
-                        <td colspan="2" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; color: #00E559; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 14px; border-bottom: 1px solid #27272A;">
-                          TRANSACTION BREAKDOWN &amp; AUDIT DATA
+                        <td colspan="2" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; color: #00E559 !important; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 14px; border-bottom: 1px solid #2A323D;">
+                          <span style="color: #00E559 !important;">TRANSACTION BREAKDOWN &amp; AUDIT DATA</span>
                         </td>
                       </tr>
                       ${tableRowsHtml}
@@ -531,14 +540,14 @@ function buildTransactionReceiptHtml({
                 <tr>
                   <td>
                     <a href="${ctaUrl}" style="display: inline-block; background-color: #00E559; color: #000000 !important; font-size: 13px; font-weight: 700; padding: 14px 28px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px; text-decoration: none;">
-                      <span style="color: #000000 !important; font-weight: 700;">View in Vault</span>
+                      <span style="color: #000000 !important; font-weight: 700;">View in Vault Ledger &rarr;</span>
                     </a>
                   </td>
                 </tr>
               </table>
 
               <!-- MANUAL LINK -->
-              <p style="font-size: 12px; color: #555555; margin-bottom: 6px;">Direct link to your transaction ledger:</p>
+              <p style="font-size: 12px; color: #71717A; margin-bottom: 6px;">Direct link to your transaction ledger:</p>
               <p style="font-size: 12px; color: #00E559; word-break: break-all; line-height: 1.4; margin-bottom: 28px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
                 ${ctaUrl}
               </p>
@@ -547,20 +556,25 @@ function buildTransactionReceiptHtml({
               <div style="height: 1px; background-color: #222222; margin-bottom: 24px;"></div>
 
               <!-- TERMINAL AUDIT BOX -->
-              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #070709; border: 1px solid #1F1F23; border-radius: 6px; margin-bottom: 24px;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #070709; border: 1px solid #2A323D; border-radius: 6px; margin-bottom: 24px;">
                 <tr>
                   <td style="padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 1.6;">
-                    <div style="color: #00E559; font-weight: 600;">&gt; CRYPTOGRAPHIC RECEIPT</div>
-                    <div style="color: #FFFFFF; font-size: 11px; word-break: break-all; margin-bottom: 10px;">${tx.transactionId}</div>
-                    <div style="color: #00E559; font-weight: 600;">&gt; SETTLEMENT TIMESTAMP</div>
-                    <div style="color: #A1A1AA; font-size: 11px; margin-bottom: 10px;">${formattedTimestamp}</div>
-                    <div style="color: #555555; font-size: 10px;">&gt; PROTOCOL: SWENTRA-VAULT-SETTLEMENT-V1</div>
+                    <div style="color: #00E559 !important; font-weight: 600;"><span style="color: #00E559 !important;">&gt; CRYPTOGRAPHIC RECEIPT</span></div>
+                    <div style="color: #FFFFFF !important; font-size: 11px; word-break: break-all; margin-bottom: 10px;"><span style="color: #FFFFFF !important;">${tx.transactionId}</span></div>
+                    <div style="color: #00E559 !important; font-weight: 600;"><span style="color: #00E559 !important;">&gt; SETTLEMENT TIMESTAMP</span></div>
+                    <div style="color: #D4D4D8 !important; font-size: 11px; margin-bottom: 10px;"><span style="color: #D4D4D8 !important;">${formattedTimestamp}</span></div>
+                    <div style="color: #71717A !important; font-size: 10px;"><span style="color: #71717A !important;">&gt; PROTOCOL: SWENTRA-VAULT-SETTLEMENT-V1 &bull; VERIFIED</span></div>
                   </td>
                 </tr>
               </table>
 
+              <!-- FRAUD WARNING & SECURITY NOTICE -->
+              <p style="font-size: 12px; line-height: 1.5; color: #D4D4D8; margin-bottom: 16px;">
+                <strong style="color: #FFFFFF;">Security Reminder:</strong> Swentra Vault will never ask for your password, PIN, or cryptographic recovery keys via email.
+              </p>
+
               <!-- REGULATORY DISCLAIMER -->
-              <p style="font-size: 11px; line-height: 1.5; color: #52525B; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+              <p style="font-size: 11px; line-height: 1.5; color: #71717A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
                 ${SIMULATION_DISCLAIMER}
               </p>
             </td>
@@ -698,6 +712,307 @@ export async function sendTransactionConfirmationEmail({
   }
 }
 
+interface IncomingTransferEmailData {
+  transactionId: string;
+  amount: number;
+  currency: string;
+  status: string;
+  reference: string;
+  senderName: string;
+  recipientAccount: string;
+  createdAt?: unknown;
+}
+
+function buildIncomingTransferReceiptHtml({
+  tx,
+  subject,
+  ctaUrl,
+}: {
+  tx: IncomingTransferEmailData;
+  subject: string;
+  ctaUrl: string;
+}): string {
+  const statusLabel = tx.status === "PROCESSING" ? "Processing" : "Completed";
+  const isProcessing = tx.status === "PROCESSING";
+  const statusColor = isProcessing ? "#EAB308" : "#00E559";
+  const statusBg = isProcessing
+    ? "rgba(234, 179, 8, 0.1)"
+    : "rgba(0, 229, 89, 0.1)";
+  const statusBorder = isProcessing
+    ? "rgba(234, 179, 8, 0.3)"
+    : "rgba(0, 229, 89, 0.3)";
+
+  const formattedAmount = `+ ${formatMoney(tx.amount, tx.currency)}`;
+  const formattedTimestamp = formatTimestamp(tx.createdAt);
+
+  const rows: Array<{ label: string; value: string; isMono?: boolean }> = [
+    {
+      label: "Transfer Type",
+      value: "Incoming Swentra Transfer",
+    },
+    {
+      label: "Settlement Status",
+      value: `${statusLabel} (Immediate Availability)`,
+    },
+    {
+      label: "Originating Sender",
+      value: tx.senderName,
+    },
+    {
+      label: "Payment Reference",
+      value: tx.reference || "Funds Transfer",
+    },
+    {
+      label: "Amount Credited",
+      value: formattedAmount,
+      isMono: true,
+    },
+    {
+      label: "Credited Account",
+      value: tx.recipientAccount,
+      isMono: true,
+    },
+    {
+      label: "Clearing Protocol",
+      value: "Swentra Internal Clearing (SIC)",
+    },
+    {
+      label: "Transaction ID",
+      value: tx.transactionId,
+      isMono: true,
+    },
+  ];
+
+  const tableRowsHtml = rows
+    .map(
+      (row) => `
+      <tr>
+        <td valign="top" style="padding: 12px 0; border-bottom: 1px solid #232932; font-size: 13px; color: #D4D4D8 !important; line-height: 1.4;" width="42%">
+          <span style="color: #D4D4D8 !important; font-size: 13px; font-weight: 500; font-family: Roboto, -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif; display: inline-block;">
+            ${row.label}
+          </span>
+        </td>
+        <td align="right" valign="top" style="padding: 12px 0; border-bottom: 1px solid #232932; font-size: 13px; color: #FFFFFF !important; line-height: 1.4; word-break: break-word;" width="58%">
+          <span style="color: #FFFFFF !important; font-size: 13px; font-weight: 600; font-family: ${
+            row.isMono
+              ? 'ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace'
+              : 'Roboto, -apple-system, BlinkMacSystemFont, \"Segoe UI\", Helvetica, Arial, sans-serif'
+          }; display: inline-block; word-break: break-word;">
+            ${row.value}
+          </span>
+        </td>
+      </tr>`,
+    )
+    .join("");
+
+  return `
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <meta name="color-scheme" content="light dark">
+        <meta name="supported-color-schemes" content="light dark">
+        <title>${subject}</title>
+        <style>
+          :root {
+            color-scheme: light dark;
+            supported-color-schemes: light dark;
+          }
+          body, p, h1, h2, h3, h4, h5, h6 { margin: 0; padding: 0; }
+          body { background-color: #000000; color: #ffffff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; -webkit-font-smoothing: antialiased; }
+          table { border-spacing: 0; border-collapse: collapse; width: 100%; }
+          td { padding: 0; }
+          a { text-decoration: none; }
+        </style>
+      </head>
+      <body style="background-color: #000000; padding: 40px 16px; margin: 0;">
+        <table width="100%" border="0" cellpadding="0" cellspacing="0" style="max-width: 600px; margin: 0 auto; background-color: #0A0A0A; border: 1px solid #222222; border-radius: 8px; overflow: hidden;">
+          <!-- Top Security Bar -->
+          <tr>
+            <td style="background-color: #050505; border-bottom: 1px solid #222222; padding: 12px 24px;">
+              <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                <tr>
+                  <td valign="middle" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #D4D4D8 !important; letter-spacing: 1.5px; text-transform: uppercase;">
+                    <span style="color: #D4D4D8 !important;">SWENTRA VAULT &bull; TRANSFER NOTIFICATION</span>
+                  </td>
+                  <td align="right" valign="middle" style="white-space: nowrap; width: 1%;">
+                    <span style="display: inline-block; white-space: nowrap; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; font-weight: 700; color: ${statusColor} !important; letter-spacing: 0.5px; background-color: ${statusBg}; border: 1px solid ${statusBorder}; padding: 4px 10px; border-radius: 4px; text-transform: uppercase;">
+                      &#9679;&nbsp;FUNDS SETTLED
+                    </span>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Main Content -->
+          <tr>
+            <td style="padding: 40px 24px;">
+              <!-- Obsidian Shield Logo Container -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <div style="display: inline-block; background-color: #000000; border: 1px solid #27272A; border-radius: 12px; padding: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.5);">
+                      <img src="${APP_URL}/assets/swentra-vault-logo-256.png" alt="Swentra Vault" width="44" height="44" style="display: block; border: 0; border-radius: 8px;" />
+                    </div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- Heading & Subtitle -->
+              <h1 style="font-size: 24px; font-weight: 500; color: #FFFFFF !important; margin-bottom: 8px; letter-spacing: -0.5px;">
+                <span style="color: #FFFFFF !important;">Funds successfully credited.</span>
+              </h1>
+              <p style="font-size: 14px; line-height: 1.5; color: #D4D4D8 !important; margin-bottom: 28px;">
+                <span style="color: #D4D4D8 !important;">You have received an incoming transfer. The full amount has been settled and is immediately available in your account balance.</span>
+              </p>
+
+              <!-- HERO CREDIT CARD -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #121417; border: 1px solid #2A323D; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 24px;">
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 10px; color: #00E559 !important; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 8px;">
+                          <span style="color: #00E559 !important; font-weight: 700;">TOTAL CREDITED TO VAULT</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 32px; font-weight: 700; color: #FFFFFF !important; letter-spacing: -0.5px; padding-bottom: 8px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                          <span style="color: #FFFFFF !important; font-weight: 700;">${formattedAmount}</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="font-size: 12px; color: #A1A1AA !important; padding-bottom: 14px;">
+                          <span style="color: #A1A1AA !important;">Instant Swiss Clearing &bull; Zero Network Fees &bull; Available Immediately</span>
+                        </td>
+                      </tr>
+                      <tr>
+                        <td style="border-top: 1px solid #232932; padding-top: 14px;">
+                          <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                            <tr>
+                              <td width="20" valign="middle" style="color: #00E559 !important; font-size: 14px; line-height: 1;">
+                                <span style="color: #00E559 !important;">&#8595;</span>
+                              </td>
+                              <td style="font-size: 13px; color: #E4E4E7 !important; font-weight: 500;">
+                                <span style="color: #E4E4E7 !important;">Credited to: <strong style="color: #FFFFFF !important;">${tx.recipientAccount}</strong></span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- STRUCTURED LEDGER CARD -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #121417; border: 1px solid #2A323D; border-radius: 8px; margin-bottom: 28px; overflow: hidden;">
+                <tr>
+                  <td style="padding: 20px 24px;">
+                    <table width="100%" border="0" cellpadding="0" cellspacing="0">
+                      <tr>
+                        <td colspan="2" style="font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; font-weight: 700; color: #00E559 !important; letter-spacing: 1.5px; text-transform: uppercase; padding-bottom: 14px; border-bottom: 1px solid #2A323D;">
+                          <span style="color: #00E559 !important;">SETTLEMENT BREAKDOWN &amp; TRANSACTION DATA</span>
+                        </td>
+                      </tr>
+                      ${tableRowsHtml}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- PRIMARY CTA BUTTON -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="margin-bottom: 24px;">
+                <tr>
+                  <td>
+                    <a href="${ctaUrl}" style="display: inline-block; background-color: #00E559; color: #000000 !important; font-size: 13px; font-weight: 700; padding: 14px 28px; border-radius: 4px; text-transform: uppercase; letter-spacing: 1px; text-decoration: none;">
+                      <span style="color: #000000 !important; font-weight: 700;">View in Vault Ledger &rarr;</span>
+                    </a>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- MANUAL LINK -->
+              <p style="font-size: 12px; color: #71717A; margin-bottom: 6px;">Direct link to your transaction ledger:</p>
+              <p style="font-size: 12px; color: #00E559; word-break: break-all; line-height: 1.4; margin-bottom: 28px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                ${ctaUrl}
+              </p>
+
+              <!-- DIVIDER -->
+              <div style="height: 1px; background-color: #222222; margin-bottom: 24px;"></div>
+
+              <!-- TERMINAL AUDIT BOX -->
+              <table width="100%" border="0" cellpadding="0" cellspacing="0" style="background-color: #070709; border: 1px solid #2A323D; border-radius: 6px; margin-bottom: 24px;">
+                <tr>
+                  <td style="padding: 16px; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; font-size: 11px; line-height: 1.6;">
+                    <div style="color: #00E559 !important; font-weight: 600;"><span style="color: #00E559 !important;">&gt; CRYPTOGRAPHIC RECEIPT</span></div>
+                    <div style="color: #FFFFFF !important; font-size: 11px; word-break: break-all; margin-bottom: 10px;"><span style="color: #FFFFFF !important;">${tx.transactionId}</span></div>
+                    <div style="color: #00E559 !important; font-weight: 600;"><span style="color: #00E559 !important;">&gt; SETTLEMENT TIMESTAMP</span></div>
+                    <div style="color: #D4D4D8 !important; font-size: 11px; margin-bottom: 10px;"><span style="color: #D4D4D8 !important;">${formattedTimestamp}</span></div>
+                    <div style="color: #71717A !important; font-size: 10px;"><span style="color: #71717A !important;">&gt; PROTOCOL: SWENTRA-VAULT-CLEARING-V1 &bull; VERIFIED</span></div>
+                  </td>
+                </tr>
+              </table>
+
+              <!-- FRAUD WARNING & SECURITY NOTICE -->
+              <p style="font-size: 12px; line-height: 1.5; color: #D4D4D8; margin-bottom: 16px;">
+                <strong style="color: #FFFFFF;">Security Reminder:</strong> Swentra Vault will never ask for your password, PIN, or cryptographic recovery keys via email.
+              </p>
+
+              <!-- REGULATORY DISCLAIMER -->
+              <p style="font-size: 11px; line-height: 1.5; color: #71717A; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
+                ${SIMULATION_DISCLAIMER}
+              </p>
+            </td>
+          </tr>
+        </table>
+      </body>
+      </html>
+    `;
+}
+
+function buildIncomingTransferReceiptText({
+  tx,
+  ctaUrl,
+}: {
+  tx: IncomingTransferEmailData;
+  ctaUrl: string;
+}): string {
+  const formattedTimestamp = formatTimestamp(tx.createdAt);
+  const textLines = [
+    "SWENTRA VAULT • TRANSFER NOTIFICATION",
+    "Status: FUNDS SETTLED",
+    "==================================================",
+    "",
+    `TOTAL CREDITED: + ${formatMoney(tx.amount, tx.currency)}`,
+    "Instant Swiss Clearing • Zero Network Fees • Available Immediately",
+    "",
+    "SETTLEMENT BREAKDOWN & TRANSACTION DATA:",
+    `- Transfer Type: Incoming Swentra Transfer`,
+    `- Settlement Status: Completed (Immediate Availability)`,
+    `- Originating Sender: ${tx.senderName}`,
+    `- Payment Reference: ${tx.reference || "Funds Transfer"}`,
+    `- Credited Account: ${tx.recipientAccount}`,
+    `- Clearing Protocol: Swentra Internal Clearing (SIC)`,
+    `- Transaction ID: ${tx.transactionId}`,
+    "",
+    `View in Vault Ledger: ${ctaUrl}`,
+    "",
+    "==================================================",
+    `> CRYPTOGRAPHIC RECEIPT: ${tx.transactionId}`,
+    `> SETTLEMENT TIMESTAMP: ${formattedTimestamp}`,
+    `> PROTOCOL: SWENTRA-VAULT-CLEARING-V1 • VERIFIED`,
+    "",
+    "Security Reminder: Swentra Vault will never ask for your password, PIN, or cryptographic recovery keys via email.",
+    "",
+    SIMULATION_DISCLAIMER,
+  ];
+
+  return textLines.join("\n");
+}
+
 /**
  * Notify the recipient of an incoming internal transfer. Reads the recipient's
  * INCOMING_TRANSFER record (server-authoritative), sends via Resend, and stamps
@@ -720,26 +1035,53 @@ export async function sendIncomingTransferEmail({
   if (tx.emailNotifiedAt) return;
 
   const amount = Math.abs(tx.amount ?? 0);
-  const currency: string = tx.currency || "";
+  const currency: string = tx.currency || "CHF";
   const reference: string = tx.reference || "Incoming Transfer";
-  const statusLabel = tx.status === "PROCESSING" ? "Processing" : "Completed";
+  const status: string = tx.status || "COMPLETED";
 
-  await sendAuthEmail({
-    to,
-    subject: `You received ${formatMoney(amount, currency)}`,
-    content: {
-      heading: "You received a transfer.",
-      body: [
-        `Amount received: ${formatMoney(amount, currency)}`,
-        `Reference: ${reference}`,
-        `Status: ${statusLabel}`,
-      ].join("\n"),
-      ctaLabel: "View Transactions",
-      ctaUrl: `${APP_URL}/app/transactions`,
-      secureTag: "FUNDS RECEIVED",
-      footerNote: SIMULATION_DISCLAIMER,
-    },
+  let senderName = tx.sourceDetails?.senderName;
+  if (!senderName && tx.sourceDetails?.senderId) {
+    try {
+      const senderUser = await getAuth().getUser(tx.sourceDetails.senderId);
+      senderName = senderUser.displayName || senderUser.email || "Swentra Client";
+    } catch {
+      senderName = "Swentra Client";
+    }
+  }
+  if (!senderName) {
+    senderName = "Swentra Vault Client";
+  }
+
+  const recipientAccount = tx.accountNumber
+    ? maskAccountNumber(tx.accountNumber)
+    : "Private Vault Liquidity";
+
+  const ctaUrl = `${APP_URL}/app/transactions`;
+  const subject = `Transfer Received: +${formatMoney(amount, currency)} credited to your vault`;
+
+  const txData: IncomingTransferEmailData = {
+    transactionId,
+    amount,
+    currency,
+    status,
+    reference,
+    senderName,
+    recipientAccount,
+    createdAt: tx.createdAt,
+  };
+
+  const { error } = await resend.emails.send({
+    from: MAIL_FROM,
+    to: [to],
+    replyTo: MAIL_REPLY_TO,
+    subject,
+    html: buildIncomingTransferReceiptHtml({ tx: txData, subject, ctaUrl }),
+    text: buildIncomingTransferReceiptText({ tx: txData, ctaUrl }),
   });
+
+  if (error) {
+    console.error("Resend send error for incoming transfer email:", error);
+  }
 
   try {
     await txRef.update({ emailNotifiedAt: FieldValue.serverTimestamp() });
